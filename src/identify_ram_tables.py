@@ -1,14 +1,11 @@
 import os,sys # ,getpass
 sys.path.insert(0,'../libs')
-
 import PyPDF2
 import pandas as pd 
 from tqdm import tqdm
 import re
 from utils_pdf import get_target_pagenum,key_reg_match
 from utils import get_all_files
-
-#%%
 
 def matching_function(content: str): 
     """
@@ -22,7 +19,7 @@ def matching_function(content: str):
     Returns:
     The result of the regex match if found, otherwise None.
     """
-    pattern = re.compile(r'(?=.*risk assessment matrix)(?=.*likelihood)(?=.*(high|medium|low))')
+    pattern = re.compile(r'(?=.*risk assessment matrix)(?=.*likelihood)(?=.*(high|medium|low))',re.I)
     res = key_reg_match(content,reg_text = pattern,mode='rgx')
     if res:
         return res
@@ -31,11 +28,6 @@ def matching_function(content: str):
 def get_table_end(filename: str, start_page_num: int, check_page_n: int = 1): 
     """
     Finds the ending page number of the risk assessment matrix table in a PDF file.
-
-    This function reads a PDF file starting from a specified page and checks consecutive
-    pages to find the end of the risk assessment matrix table. The end is determined by
-    the presence of specific keywords in the text. It searches for the occurrence of words
-    like 'likelihood' and 'risk' to identify the end of the table.
 
     Args:
     filename (str): The path to the PDF file to be searched.
@@ -52,7 +44,7 @@ def get_table_end(filename: str, start_page_num: int, check_page_n: int = 1):
             pageObj = pdfReader.pages[pageNum]
             content = pageObj.extract_text().lower().replace('\n','').replace('  ',' ')
             #pattern = re.compile(r'likelihood|policy response',re.I)
-            pattern = re.compile(r'(?=.*likelihood)(?=.*risk)')
+            pattern = re.compile(r'(?=.*likelihood)(?=.*risk)',re.I)
             res = key_reg_match(content,reg_text = pattern,mode='rgx')
             if res:
                 all_res.append(pageNum)
