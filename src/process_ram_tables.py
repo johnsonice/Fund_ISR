@@ -164,22 +164,3 @@ if __name__ == "__main__":
     print(res_df['standard_table'].value_counts(normalize=True) * 100)
     res_df.to_csv(out_path)     
     print('export status to {}'.format(out_path))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# %%

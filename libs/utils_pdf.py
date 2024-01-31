@@ -47,40 +47,40 @@ def get_target_pagenum(filename,match_func,return_mode='first'): ## mode = first
     pdfFileObj.close()
     return all_res
 
-def get_table_end(filename,start_page_num,check_page_n=1):
-    pdfFileObj = open(filename,'rb')
-    pdfReader = PyPDF2.PdfReader(pdfFileObj)
-    all_res = []
-    for pageNum in range(start_page_num+1,start_page_num+check_page_n+1):
-            pageObj = pdfReader.pages[pageNum]
-            content = pageObj.extract_text().lower().replace('\n','').replace('  ',' ')
-            #pattern = re.compile(r'likelihood|policy response',re.I)
-            pattern = re.compile(r'(?=.*likelihood)(?=.*policy response)(?=.*risk)')
-            res = key_reg_match(content,reg_text = pattern,mode='rgx')
-            if res:
-                all_res.append(pageNum)
-            else:
-                if len(all_res)>0:
-                    return all_res[-1]
+# def get_table_end(filename,start_page_num,check_page_n=1):
+#     pdfFileObj = open(filename,'rb')
+#     pdfReader = PyPDF2.PdfReader(pdfFileObj)
+#     all_res = []
+#     for pageNum in range(start_page_num+1,start_page_num+check_page_n+1):
+#             pageObj = pdfReader.pages[pageNum]
+#             content = pageObj.extract_text().lower().replace('\n','').replace('  ',' ')
+#             #pattern = re.compile(r'likelihood|policy response',re.I)
+#             pattern = re.compile(r'(?=.*likelihood)(?=.*policy response)(?=.*risk)')
+#             res = key_reg_match(content,reg_text = pattern,mode='rgx')
+#             if res:
+#                 all_res.append(pageNum)
+#             else:
+#                 if len(all_res)>0:
+#                     return all_res[-1]
 
-## example of a matching function 
-def matching_function(content):
-    match_key = 'risk assessment matrix'
-    if key_reg_match(content,search_text=match_key,mode='key'):
-            pattern = re.compile(r'likelihood|policy response',re.I)
-            # Search the text for the pattern
-            res = key_reg_match(content,reg_text = pattern,mode='rgx')
-            return res 
-    return None
+# ## example of a matching function 
+# def matching_function(content):
+#     match_key = 'risk assessment matrix'
+#     if key_reg_match(content,search_text=match_key,mode='key'):
+#             pattern = re.compile(r'likelihood|policy response',re.I)
+#             # Search the text for the pattern
+#             res = key_reg_match(content,reg_text = pattern,mode='rgx')
+#             return res 
+#     return None
 
-#%%
-if __name__ == "__main__":
-    file_path = "/root/workspace/data/DOCs/PDF/USA_2022.pdf"
-    pgn = get_target_pagenum(file_path,matching_function,return_mode='first')
-    end_pgn = get_table_end(file_path,pgn,check_page_n=2)
-    print(pgn,end_pgn)
+# #%%
+# if __name__ == "__main__":
+#     file_path = "/root/workspace/data/DOCs/PDF/USA_2022.pdf"
+#     pgn = get_target_pagenum(file_path,matching_function,return_mode='first')
+#     end_pgn = get_table_end(file_path,pgn,check_page_n=2)
+#     print(pgn,end_pgn)
 
-#%%
+# #%%
 
 
 
