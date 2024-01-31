@@ -38,6 +38,12 @@ This project utilizes AI tools for the 2025 interim surveillance review. The pro
 - **`src` Directory:**
   - Hosts code snippets and scripts necessary to complete the required tasks for the review.
 
+## To-Do List
+
+- [ ] Task 1: Extract all risks, likelihood and policy responses from AIVs; clean them up  -- Chengyu
+- [ ] Task 2: Process/clean raw AIV info, remove elements like authorities' views ; appendex ; data tables etc; (Di has done some work before, need to be tweaked)
+- [ ] Task 3: Design a step by step process to use GPT to answer ISR questions
+- [ ] Task 4: Design a strategy to categorize generate responses (in the end they need to be some kind of charts of summaries)
 
 ## Contact
 - chuang@imf.org
