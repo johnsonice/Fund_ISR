@@ -55,8 +55,10 @@ def get_table_end(filename: str, start_page_num: int, check_page_n: int = 1):
 
 if __name__ == "__main__":
     
-    PDF_folder = '/root/workspace/data/DOCs/pdf_temp'
-    res_folder = '/root/workspace/data/ISR_Results'
+    # PDF_folder = '/root/workspace/data/DOCs/pdf_temp'
+    # res_folder = '/root/workspace/data/ISR_Results'
+    PDF_folder = '/root/workspace/data/DOCs/PDF'
+    res_folder = '/root/workspace/data/DOCs/RAM/PDF'
     all_pdfs = get_all_files(PDF_folder,end_with='.pdf')
     file_names = [os.path.basename(f) for f in all_pdfs]
 
@@ -75,7 +77,7 @@ if __name__ == "__main__":
     
     ## check ram table numbers 
     pn_df = pd.DataFrame(results)
-    pn_df.to_csv(os.path.join(res_folder,'RAM_Tables','ram_table_pn.csv'),index=False)
+    pn_df.to_csv(os.path.join(res_folder,'..','ram_table_pn.csv'),index=False)
     print(pn_df[pn_df[1]<20]) ## ram table should at the end, so page number should be relatively large ; otherwise it is a problem 
 
     ###########################
@@ -94,15 +96,15 @@ if __name__ == "__main__":
                         tempPdfWriter.add_page(pageObj)  ## write to country specific file 
                         pdfWriter.add_page(pageObj)      ## write to an aggregated file 
                     ## write to country specific file 
-                    temp_out_name = os.path.join(res_folder,'RAM_Tables','by_country',file_id+'.pdf')
+                    temp_out_name = os.path.join(res_folder,file_id+'.pdf')
                     with  open(temp_out_name, 'wb') as pdfOutput:
                         tempPdfWriter.write(pdfOutput)
     ## write to an aggregated file                     
-    out_name = os.path.join(res_folder,'RAM_Tables','RAM_tables_large_v2.pdf')
+    out_name = os.path.join(res_folder,'..','RAM_tables_agg.pdf')
     with open(out_name, 'wb') as pdfOutput:
         pdfWriter.write(pdfOutput)
 
-    print('Finished, results in {}'.format(os.path.join(res_folder,'RAM_Tables')))
+    print('Finished, results in {}'.format(os.path.join(res_folder,'..')))
 
 
 
