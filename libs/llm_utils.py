@@ -74,13 +74,15 @@ OAI_PRICE_DICT = {
 
 ## define a base openai agent class 
 class BSAgent():
-    def __init__(self, api_key=None, 
-                 model="gpt-3.5-turbo-1106", 
+    def __init__(self,
+                 api_key=None, 
+                 api_base_url='https://api.openai.com/v1',
+                 model="gpt-4o", 
                  temperature=0):
-
         if not api_key:
             api_key = os.environ['OPENAI_API_KEY']
-        self.client = OpenAI(api_key=api_key)
+        self.client = OpenAI(api_key=api_key,
+                             base_url=api_base_url)
         self.temperature = temperature
         if model:
             self.model = model

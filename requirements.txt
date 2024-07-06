@@ -13,4 +13,5 @@ streamlit
 chromadb
 llmsherpa
 llama-index
+tqdm
 #pipregs

@@ -8,8 +8,11 @@ from functools import wraps
 import time
 
 now = datetime.datetime.now()
-name = os.getlogin()
-USER = name.upper()
+try:
+    name = os.getlogin()
+    USER = name.upper()
+except:
+    USER ='UNKNOWN'
 file_path = f"log/{USER}/{datetime.date.today()}"
 os.makedirs(file_path,exist_ok=True)
 filename = f"{file_path}/Exp-{now.hour}:{now.minute}.log"
