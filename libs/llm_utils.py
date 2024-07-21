@@ -23,51 +23,40 @@ def tiktoken_len(text):
     return len(tokens)
 
 def get_oai_fees(model_name: str, prompt_tokens: int, completion_tokens: int) -> float:
-    if model_name.startswith("gpt-4-32k"):
-        model_name = "gpt-4-32k"
-    elif model_name.startswith("gpt-4-1106"):
-        model_name = "gpt-4-1106-preview"
+    if model_name.startswith("gpt-4o-mini"):
+        model_name = "gpt-4o-mini"
+    elif model_name.startswith("gpt-4o"):
+        model_name = "gpt-4o"
     elif model_name.startswith("gpt-4"):
         model_name = "gpt-4"
-    elif model_name.startswith("gpt-3.5-turbo-16k"):
-        model_name = "gpt-3.5-turbo-16k"
-    elif model_name.startswith("gpt-3.5-turbo-1106"):
-        model_name = "gpt-3.5-turbo-1106"
     elif model_name.startswith("gpt-3.5-turbo"):
         model_name = "gpt-3.5-turbo"
     else:
-        raise ValueError(f"Unknown model name {model_name}")
+        logging.info(f"Unknown model name {model_name}")
+        #print(f"Unknown model name {model_name}")
     if model_name not in OAI_PRICE_DICT:
         return -1
-    fee = (OAI_PRICE_DICT[model_name]["prompt"] * prompt_tokens + OAI_PRICE_DICT[model_name]["completion"] * completion_tokens) / 1000
+    fee = (OAI_PRICE_DICT[model_name]["prompt"] * prompt_tokens + OAI_PRICE_DICT[model_name]["completion"] * completion_tokens) / 1000000
     # print (f"Model name used for billing: {model_name} \n{fee}")
     
     return fee
 
 OAI_PRICE_DICT = {
+    "gpt-4o-mini": {
+        "prompt": 0.15,
+        "completion": 0.6
+    },
+    "gpt-4o": {
+        "prompt": 5,
+        "completion": 15
+    },
     "gpt-4": {
-        "prompt": 0.03,
-        "completion": 0.06
-    },
-    "gpt-4-32k": {
-        "prompt": 0.06,
-        "completion": 0.12
-    },
-    "gpt-4-1106-preview": {
-        "prompt": 0.01,
-        "completion": 0.03
+        "prompt": 5,
+        "completion": 15
     },
     "gpt-3.5-turbo": {
-        "prompt": 0.0015,
-        "completion": 0.002
-    },
-    "gpt-3.5-turbo-16k": {
-        "prompt": 0.003,
-        "completion": 0.004
-    },
-    "gpt-3.5-turbo-1106": {
-        "prompt": 0.001,
-        "completion": 0.002
+        "prompt": 0.5,
+        "completion": 1.5
     }
 }
 
@@ -92,21 +81,23 @@ class BSAgent():
 
         self.message.append(response["choices"][0]["message"])
 
-    def _get_api_response(self,model,conv_history,temperature,stream,json_mode):
+    def _get_api_response(self,model,conv_history,temperature,stream,json_mode,**kwargs):
         if json_mode:
             response = self.client.chat.completions.create(
                         model=model,
                         response_format={ "type": "json_object" },
                         messages=conv_history,
                         temperature=temperature,
-                        stream=stream
+                        stream=stream,
+                        **kwargs
                     )
         else:  
             response = self.client.chat.completions.create(
                         model=model,
                         messages=conv_history,
                         temperature=temperature,
-                        stream=stream
+                        stream=stream,
+                        **kwargs
                     )
         return response
     
@@ -117,11 +108,12 @@ class BSAgent():
                        prompt_template, 
                        model=None,
                        temperature=None,
-                       conv_history=[],
+                       conv_history=None,
                        return_cost=False,
                        verbose=True,
                        stream=False,
-                       json_mode=False):
+                       json_mode=False,
+                       **kwargs):
         if not model:
             model = self.model
         
@@ -134,12 +126,14 @@ class BSAgent():
         if prompt_template.get('Human'):
             new_message.append({"role": "user", "content": prompt_template['Human']})
         
+        if conv_history is None:
+            conv_history=[]
         conv_history.extend(new_message)
         
         if len(conv_history) == 0 :
             raise Exception('prompt template error, prompt must be a dict with with System message or Human message.')
   
-        response = self._get_api_response(model,conv_history,temperature,stream,json_mode)
+        response = self._get_api_response(model,conv_history,temperature,stream,json_mode,**kwargs)
         # response = self.client.chat.completions.create(
         #             model=model,
         #             messages=conv_history,
