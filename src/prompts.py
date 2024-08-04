@@ -78,4 +78,23 @@ Response:
 """}
 #########################
 
+output_fixing_pt = {'System':"You are an intelligent assistant specialized in formatting text. Your task is to take raw LLM output and format it according to user-provided instructions. Follow the specific formatting guidelines given and ensure the final output is clean, readable, and adheres to the specified style.",
+      'Human':"""
+Here is the raw LLM output:
+----------------
+----------------
+{LLM_OUTPUT}
+----------------
+----------------
 
+You are supposed to extract appropriate information for reasoning and topic_labels. topic_labels has additional information for confidence score.
+
+Please respond in clean json format as follow:
+```json
+{{"reasoning": "<reasoning process>", 
+"topic_labels": [{{"topic_label":"<identified topic label>","confidence_score":<confidence score>}},...]}}
+```
+Response:
+"""}
+
+#########################################################################################################################
