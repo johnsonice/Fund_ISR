@@ -12,7 +12,18 @@ except:
 import os
 from utils import load_json,logging,exception_handler
 import json
+from huggingface_hub import hf_hub_download
+from huggingface_hub import snapshot_download
 
+def donload_hf_model(REPO_ID,save_location):
+    # REPO_ID = "meta-llama/Meta-Llama-3-8B-Instruct"
+    # save_location = '/root/data/hf_cache/llama-3-8B-Instruct'
+    hf_token = input("huggingface token:")
+    snapshot_download(repo_id=REPO_ID,
+                    local_dir=save_location,
+                    token=hf_token)
+    
+    return save_location
 
 # create the length function
 def tiktoken_len(text):
@@ -211,6 +222,59 @@ class BSAgent_legacy(BSAgent):
     def parse_load_json_str(js):
         res = json.loads(js.replace("```json","").replace("```",""))
         return res
+    
+def parse_result(res, parser,verbose):
+    try:
+        return parser.parse(res).dict()
+    except Exception as e:
+        if verbose:
+            print(f"Parser error: {e}")
+        return None
+    
+def custom_llm_result_parsing(llm_res, llm_agent, json_parse=True,parser=None, output_fixing_pt_temp=None,verbose=False):
+    """
+    Parses the response from an LLM agent using a specified parser. If the parser fails,
+    it attempts to parse the response as JSON, and if that fails, it uses an optional
+    output fixing prompt template to reformat the response.
+
+    Args:
+        llm_res (str): The response string from the LLM agent to be parsed.
+        llm_agent (object): The LLM agent object which has methods for parsing and getting responses.
+        json_parse (bool, optional): Flag to indicate if a basic JSON parsing should be attempted if the parser fails. Defaults to True.
+        parser (object, optional): A custom parser object with a parse method. Defaults to None.
+        output_fixing_pt_temp (str, optional): A prompt template string for the LLM agent to fix the output format. Defaults to None.
+        verbose (bool, optional): Flag to print detailed error messages and steps. Defaults to False.
+
+    Returns:
+        dict or None: The parsed response as a dictionary, or None if all parsing attempts fail.
+    """
+
+    if parser:
+        res_dict = parse_result(llm_res, parser,verbose)
+        if res_dict is None:
+            if json_parse:
+                try:
+                    res_dict = llm_agent.parse_load_json_str(llm_res)
+                    if verbose:
+                        print('Use basic json parse to fix output ...')
+                except Exception as e:
+                    if verbose:
+                        print(f"JSON parsing error: {e}")
+                    res_dict = None
+            if res_dict is None and output_fixing_pt_temp:
+                try:
+                    new_res = llm_agent.get_response_content(prompt_template=output_fixing_pt_temp, max_tokens=4096,temperature=0)
+                    #print(res)
+                    res_dict = custom_llm_result_parsing(new_res, llm_agent,json_parse,parser, False)
+                    if verbose:
+                        print('Use llm to fix output ...')
+                except Exception as e:
+                    if verbose:
+                        print(f"Output fixing template error: {e}")
+                    res_dict = None
+        return res_dict
+    else:
+        return None
 
 #%%
 if __name__ == "__main__":
