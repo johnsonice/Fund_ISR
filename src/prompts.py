@@ -98,3 +98,14 @@ Response:
 """}
 
 #########################################################################################################################
+output_fixing_pt = {'System':"""
+                    You are an experience macroeconomist from IMF. You will be given a paragraph from IMF Staff repoart in the user prompt.
+                    Your job is to determine if the paragraph discussed about gender issues in economic context. 
+                    Please think step by step, and provide your thoughts and then give a Yes or No answer. 
+                    The output format shoud follow:
+                    ```json
+                    {{"reasoning": "<reasoning process>", 
+                    "answer": "<Yes or No>"
+                    ```
+                    """,
+                    'Human':"""{USER_INPUT}"""}
