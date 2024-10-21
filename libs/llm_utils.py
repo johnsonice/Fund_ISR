@@ -136,10 +136,12 @@ class BSAgent():
             temperature = self.temperature
         
         new_message = []
-        if prompt_template.get('System'):
-            new_message.append({"role": "system", "content": prompt_template['System']})
-        if prompt_template.get('Human'):
-            new_message.append({"role": "user", "content": prompt_template['Human']})
+        if prompt_template.get('system'):
+            raise Exception('No system message in prompt template')
+            new_message.append({"role": "system", "content": prompt_template['system']})
+        if prompt_template.get('user'):
+            raise Exception('No user message in prompt template')
+            new_message.append({"role": "user", "content": prompt_template['user']})
         
         if conv_history is None:
             conv_history=[]
