@@ -3,8 +3,8 @@
 
 ############################
 topic_identify_simple_pt = {
-    'System':'You are an experience macroeconomist from IMF. Your job is to assign topic labels to a given paragraph from IMF document',
-    'Human':"""
+    'system':'You are an experience macroeconomist from IMF. Your job is to assign topic labels to a given paragraph from IMF document',
+    'user':"""
 You are given a list of topics with their definition and key indicators as below:
 ----------------
 ----------------

@@ -6,6 +6,8 @@ import logging
 import datetime 
 from functools import wraps
 import time
+from huggingface_hub import hf_hub_download
+from huggingface_hub import snapshot_download
 
 now = datetime.datetime.now()
 try:
@@ -24,7 +26,17 @@ logging.basicConfig(
     format=fmt
     )
 
-
+def donload_hf_model(REPO_ID, save_location, hf_token=None):
+    if hf_token is None:
+        hf_token = os.getenv('huggingface_token')
+        if hf_token is None:
+            hf_token = input("huggingface token:")
+            
+    snapshot_download(repo_id=REPO_ID,
+                    local_dir=save_location, 
+                    token=hf_token)
+    
+    return save_location
 
 def load_json(f_path):
     with open(f_path) as f:

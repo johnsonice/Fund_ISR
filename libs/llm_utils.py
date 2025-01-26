@@ -17,14 +17,14 @@ import json
 from huggingface_hub import hf_hub_download
 from huggingface_hub import snapshot_download
 
-def donload_hf_model(REPO_ID,save_location):
-    # REPO_ID = "meta-llama/Meta-Llama-3-8B-Instruct"
-    # save_location = '/root/data/hf_cache/llama-3-8B-Instruct'
-    hf_token = os.getenv("huggingface_token")
+def donload_hf_model(REPO_ID, save_location, hf_token=None):
     if hf_token is None:
-        hf_token = input("huggingface token:")
+        hf_token = os.getenv('huggingface_token')
+        if hf_token is None:
+            hf_token = input("huggingface token:")
+            
     snapshot_download(repo_id=REPO_ID,
-                    local_dir=save_location,
+                    local_dir=save_location, 
                     token=hf_token)
     
     return save_location
