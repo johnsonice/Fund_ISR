@@ -194,7 +194,7 @@ async def process_all_files(agent, input_files, output_dir, prompt_template):
             input_file, 
             output_file, 
             prompt_template,
-            batch_size=64
+            batch_size=128
         )
 #%%
 
