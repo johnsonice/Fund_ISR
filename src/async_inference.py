@@ -189,13 +189,18 @@ async def process_all_files(agent, input_files, output_dir, prompt_template):
     """Process all files using a single event loop"""
     for input_file in tqdm.tqdm(input_files, desc="Processing files"):
         output_file = output_dir / f"results_{input_file.name}"
-        await process_file(
-            agent, 
-            input_file, 
-            output_file, 
-            prompt_template,
-            batch_size=128
-        )
+        try:
+            await process_file(
+                agent, 
+                input_file, 
+                output_file, 
+                prompt_template,
+                batch_size=64
+            )
+        except Exception as e:
+            print(f"Error processing file {input_file.name}: {str(e)}")
+            continue
+
 #%%
 
 if __name__ == "__main__":
