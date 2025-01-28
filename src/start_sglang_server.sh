@@ -16,7 +16,7 @@ python -m sglang.launch_server \
     --port "$PORT" \
     --dtype bfloat16 \
     --api-key "$API_KEY" \
-    --context-length 4096 \
+    --context-length 8192 \
     --served-model-name "$SERVED_MODEL_NAME" \
     --allow-auto-truncate \
     --dp-size $DP_SIZE
