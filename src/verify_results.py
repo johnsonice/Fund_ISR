@@ -24,18 +24,34 @@ class TopicClassification(BaseModel):
     reasoning: str
     topic_labels: List[TopicLabel]
 
-def check_result_errors(result_df: pd.DataFrame, filename: str = None) -> list:
-    """Check for errors and null values in result dataframe."""
+def check_result_errors(result_df: pd.DataFrame, filename: str = None) -> tuple[list, pd.DataFrame]:
+    """Check for errors and null values in result dataframe and return error rows.
+    
+    Args:
+        result_df: DataFrame containing results to check
+        filename: Optional name of file being checked
+        
+    Returns:
+        Tuple containing:
+        - List of error messages
+        - DataFrame containing only the error rows with filename column added
+    """
     issues = []
     
     # Check for empty lists in topic labels
-    empty_topic_labels = result_df['topic_labels'].apply(lambda x: x == '[]' or len(x) == 0 or x is None).sum()
+    error_mask = result_df['topic_labels'].apply(lambda x: x == '[]' or len(x) == 0 or x is None)
+    empty_topic_labels = error_mask.sum()
+    
     if empty_topic_labels > 0:
         pct_empty_topics = (empty_topic_labels / len(result_df)) * 100
         file_info = f" in {filename}" if filename else ""
         issues.append(f"Found {empty_topic_labels} ({pct_empty_topics:.1f}%) empty topic label lists{file_info}")
     
-    return issues
+    # Extract error rows and add filename
+    error_df = result_df[error_mask].copy()
+    error_df['filename'] = filename
+    
+    return issues, error_df
 
 def patch_error_rows(result_df: pd.DataFrame, agent: BSAgent) -> pd.DataFrame:
     """Patch rows with empty topic labels using synchronous agent."""
@@ -69,6 +85,8 @@ def patch_error_rows(result_df: pd.DataFrame, agent: BSAgent) -> pd.DataFrame:
     
     return result_df
 
+
+
 def verify_results(input_dir: Path, 
                    output_dir: Path, 
                    patch_errors: bool = False,
@@ -77,10 +95,11 @@ def verify_results(input_dir: Path,
                    ):
     """Quick verification of result files against input files."""
     input_files = [f for f in input_dir.glob('*.csv') if not f.name.startswith('results_')]
-    print(input_files)
+    #print(input_files)
     issues = []
     files_with_errors = []
     total_error_count = 0
+    all_error_rows = pd.DataFrame()
     
     # Step 1: Check for missing result files
     print("\nChecking for missing result files...")
@@ -93,7 +112,7 @@ def verify_results(input_dir: Path,
         for issue in issues:
             print(f"- {issue}")
         if not ignore_file_missing:
-            return False
+            return False, pd.DataFrame()
     
     # Step 3: Check for errors and collect statistics
     print("\nChecking for errors and collecting statistics...")
@@ -102,11 +121,12 @@ def verify_results(input_dir: Path,
         result_file_path = output_dir / result_file.name
         result_df = pd.read_csv(result_file_path)
         
-        error_issues = check_result_errors(result_df, result_file.name)
+        error_issues, error_df = check_result_errors(result_df, result_file.name)
         if error_issues:
             files_with_errors.append(result_file.name)
             total_error_count += int(re.search(r'Found (\d+)', error_issues[0]).group(1))
             issues.extend(error_issues)
+            all_error_rows = pd.concat([all_error_rows, error_df], ignore_index=True)
     
     if files_with_errors:
         print(f"\nError Statistics:")
@@ -127,14 +147,12 @@ def verify_results(input_dir: Path,
                 result_df.to_csv(result_file_path, index=False)
                 print(f"Saved patched results to {result_file}")
     
-    if issues:
-        print("\nAll issues found:")
-        for issue in issues:
-            print(f"- {issue}")
-    else:
-        print("\nAll files verified successfully!")
+    # if issues:
+    #     print("\nAll issues found: {}".format(len(issues)))
+    # else:
+    #     print("\nAll files verified successfully!")
     
-    return len(issues) == 0
+    return len(issues) == 0, all_error_rows
 
 #%%
 if __name__ == "__main__":
@@ -150,15 +168,19 @@ if __name__ == "__main__":
     test_response = agent.get_response_content(prompt_template=test_prompt)
     print("Agent test response:", test_response)
     #%%
-    
     # Verify all results
-    verify_results(
+    error_flag, error_df = verify_results(
         data_dir / 'All_AIV_2008-2024_CSV',
         data_dir / 'All_AIV_2008-2024_CSV_topic_identify',
         patch_errors=False,
         agent=agent,
         ignore_file_missing=True
     ) 
+    print("Error flag:", error_flag)
+    print("\n # of issues found: {}".format(len(error_df)))
+    error_report_path = data_dir /'error_report.csv'
+    error_df.to_csv(error_report_path, index=False)
+    print("Error file exported to :", error_report_path)
 #%%
         
 
