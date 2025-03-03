@@ -72,7 +72,7 @@ Try your best to assign only one topic to the paragraph. You can use multiple ca
 Please be aware that there is a **Other Topics** category. If the paragraph does not fit into any of the predefined topics before **Other Topics** category, put it as **Other Topics**. 
 Please provide your reasoning for your classification first, and then provide the topic label and a confidence score from 0-100.
 
-Please respond in clean json format as follow:
+Please respond in clean json format as follow and your output should include only this dictionary, with no additional commentary.
 ```json
 {{"reasoning": "<reasoning process>", 
 "topic_labels": [{{"topic_label":"<identified topic label>","confidence_score":<confidence score>}},...]}}
@@ -93,7 +93,7 @@ Here is the raw LLM output:
 
 You are supposed to extract appropriate information for reasoning and topic_labels. topic_labels has additional information for confidence score.
 
-Please respond in clean json format as follow:
+Please respond in clean json format as follow and your output should include only this dictionary, with no additional commentary.
 ```json
 {{"reasoning": "<reasoning process>", 
 "topic_labels": [{{"topic_label":"<identified topic label>","confidence_score":<confidence score>}},...]}}
