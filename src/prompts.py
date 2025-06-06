@@ -113,3 +113,93 @@ gender_identifier = {'System':"""
                     ```
                     """,
                     'Human':"""{USER_INPUT}"""}
+
+#########################################################################################################################
+########### Table content extraction with Gemini prompts
+#########################################################################################################################
+extract_ram2csv = """
+**Objective:** Extract data from Risk Assessment Matrix (RAM) tables within a provided document and output it into a structured CSV file.
+
+**Phase 1: Identification of Relevant Risk Assessment Matrix Tables**
+Carefully examine the document to identify the correct table(s) based on the following ordered criteria:
+
+1.  **Primary Keyword Search:**
+    * Look for titles or headings immediately preceding a table that contain any of these exact phrases (case-insensitive): "RAM", "Risk Assessment Matrix", "Overall Level of Concern".
+    * Look for these same phrases within the table itself, either as a table heading or as a column header.
+2.  **Handling Multi-Page Tables:**
+    * If a table matching the criteria spans multiple pages, ensure all segments of the table are consolidated and treated as a single entity.
+3.  **Appendix Search (Secondary Location):**
+    * If no table is identified in the main body of the document using the primary keywords, search within any section labeled as "Appendix" (or similar, e.g., "Annex").
+    * In the appendix, look for tables that contain column names such as (or similar to): "Source", "Risk", "Threat", "Likelihood", AND "Impact". The presence of columns related to both likelihood and impact is crucial here.
+4.  **No Table Found:**
+    * If, after following all the above steps, no suitable table can be confidently identified, return nothing or an empty CSV.
+
+**Phase 2: Data Extraction and CSV Output Formatting**
+Once a relevant table is identified, extract its data and structure it into a CSV file with the following precise columns. Apply these rules to each row of the identified table(s):
+
+1.  **`Heading`**:
+    * Content: Store the table's primary title or caption if available. If multiple (e.g., a number and a title), combine them. If no explicit title/caption is found directly associated with the table, leave this field empty for that table's rows.
+2.  **`Risk Type`**:
+    * Source: Identify the row, column or section headers  in the source table that most likely contains types of risks. They oftern appear as 'Global Risks','External Risks' or 'Domestic Risks','Country Specific Risks', or similar.
+    * Content: it should be classificed as either "Global Risks" Or "Domestic Risks". This field cannot be empty. 
+3.  **`Risk`**:
+    * Source: Identify the column in the source table that most likely contains risk descriptions. Look for column headers containing keywords like "Risk", "Threat", "Hazard", or "Source".
+    * Content: Extract the full text from this cell. This field cannot be empty. It often contains long, descriptive text.
+4.  **`Time Horizon`**:
+    * Source: Identify the column in the source table that most likely contains description on the time horizon of the risk. Look for column headers containing keywords like "Time Horizon".
+    * Content: Extract coresponding time horizon description from this cell. There are cases where time horizon information is mix together with likelihood infomation, Make sure only extract time horizon infomation. This field is optional, if the table does not contain this information, leave it empty.
+5.  **`Likelihood Full`**:
+    * Source: Identify the column in the source table that most likely contains detailed likelihood information. Look for column headers containing the keyword "Likelihood".
+    * Content: Extract EVERYTHING from this cell, including multiple paragraphs, bullet points, and any text separated by large blank spaces. This field cannot be empty.
+6.  **`Likelihood`**:
+    * Source: From the content extracted for `Likelihood Full`.
+    * Content: Extract only the first line or primary categorical value that typically describes the level of likelihood (e.g., "High", "Medium", "Low", "Likely", "Unlikely", "Remote", "Possible", "Frequent"). If the first line is a detailed sentence, try to infer the single-word or short-phrase category.
+7.  **`Impact Full`**:
+    * Source: Identify the column in the source table that most likely contains detailed impact information. Look for column headers containing the keyword "Impact" or "Consequence".
+    * Content: Extract EVERYTHING from this cell, including multiple paragraphs, bullet points, and any text separated by large blank spaces. This field cannot be empty.
+8.  **`Impact`**:
+    * Source: From the content extracted for `Impact Full`.
+    * Content: Extract only the first line or primary categorical value that typically describes the level of impact (e.g., "High", "Medium", "Low", "Severe", "Moderate", "Minor", "Catastrophic", "Significant"). If the first line is a detailed sentence, try to infer the single-word or short-phrase category.
+9.  **`Policy Response`**:
+    * Source: Identify the column in the source table that most likely contains information about policy responses to the risk. Look for column headers containing keywords like "Policy", "Response", "Mitigation", "Action", or "Measure".
+    * Content: Extract the full text from this cell. If no such column is found, or if the cell for a given risk is empty, leave this field empty in the CSV.
+
+**Phase 3: Important Processing Details**
+
+1.  **Footnote Removal:** If footnotes or source notes are present directly beneath the table content (and are clearly distinguishable from the main table data), they should be excluded from the extraction.
+2.  **Data Integrity:**
+    * If a row within an identified RAM table is missing data for the determined "Risk", "Likelihood Full", or "Impact Full" source columns, still include the row but leave the corresponding CSV cells empty for that missing piece (this slightly overrides "can't be empty" for cases where a source cell *within an otherwise valid RAM row* is blank). The expectation is that most rows in a valid RAM will have this data.
+    * Prioritize accurate mapping of table columns to the requested CSV columns.
+
+**Output:**
+Provide the extracted data as a single CSV file.
+
+"""
+
+extract_ram2md = """
+**Objective:** Convert data from Risk Assessment Matrix (RAM) tables within a provided document and output it into a Markdown.
+
+**Phase 1: Identification of Relevant Risk Assessment Matrix Tables**
+Carefully examine the document to identify the correct table(s) based on the following ordered criteria:
+
+1.  **Primary Keyword Search:**
+    * Look for titles or headings immediately preceding a table that contain any of these exact phrases (case-insensitive): "RAM", "Risk Assessment Matrix", "Overall Level of Concern".
+    * Look for these same phrases within the table itself, either as a table heading or as a column header.
+2.  **Handling Multi-Page Tables:**
+    * If a table matching the criteria spans multiple pages, ensure all segments of the table are consolidated and treated as a single entity.
+3.  **Appendix Search (Secondary Location):**
+    * If no table is identified in the main body of the document using the primary keywords, search within any section labeled as "Appendix" (or similar, e.g., "Annex").
+    * In the appendix, look for tables that contain column names such as (or similar to): "Source", "Risk", "Threat", "Likelihood", AND "Impact". The presence of columns related to both likelihood and impact is crucial here.
+4.  **No Table Found:**
+    * If, after following all the above steps, no suitable table can be confidently identified, return nothing.
+    
+**Phase 2: Data Extraction and Markdown Output Formatting**
+1.  Once a relevant table is identified, extract its data and structure it into a Markdown format.
+
+**Phase 3: Important Processing Details**
+1.  **Footnote Removal:** If footnotes or source notes are present directly beneath the table content (and are clearly distinguishable from the main table data), they should be excluded from the extraction.
+2.  **Data Integrity:** the output content should be the exact content from the table, without any paraphrasing, summarization or modification in wording. 
+
+**Output:**
+Provide the extracted data as a Markdown file.
+"""
