@@ -44,9 +44,12 @@ def get_target_pagenum(filename,match_func,return_mode='first'): ## mode = first
                     return pageNum
                 if return_mode=='all':
                     all_res.append(pageNum)
-            
     pdfFileObj.close()
-    return all_res
+    if return_mode=='first':
+        return None
+    if return_mode=='all':
+        return all_res
+
 class Word_Table_Extractor():
     def __init__(self, filepath=None):
         self.filepath = filepath

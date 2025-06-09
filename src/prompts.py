@@ -170,6 +170,7 @@ Once a relevant table is identified, extract its data and structure it into a CS
 2.  **Data Integrity:**
     * If a row within an identified RAM table is missing data for the determined "Risk", "Likelihood Full", or "Impact Full" source columns, still include the row but leave the corresponding CSV cells empty for that missing piece (this slightly overrides "can't be empty" for cases where a source cell *within an otherwise valid RAM row* is blank). The expectation is that most rows in a valid RAM will have this data.
     * Prioritize accurate mapping of table columns to the requested CSV columns.
+    * All data rows must have the **same number of columns** as the table header. Ensure all rows are well-formed and consistent.
 
 **Output:**
 Provide the extracted data as a single CSV file.

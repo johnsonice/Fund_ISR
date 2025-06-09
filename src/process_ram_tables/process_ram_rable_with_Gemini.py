@@ -1,4 +1,3 @@
-
 from google import genai
 from google.genai import types
 import os,re,pathlib,httpx,sys
@@ -59,28 +58,24 @@ def clean_RAM(ram):
 
     letter_pattern = r'[a-zA-Z]'
     keyword_pattern = r'(risk|assessment|matrix|ram)'
-    likelihood_impact_keywords = ['high', 'medium', 'low', 'moderate', 'severe']
+    # likelihood_impact_keywords = ['high', 'medium', 'low', 'moderate', 'severe']
 
-    # Remove rows where 'Likelihood' or 'Impact' columns contain no letters
-
+    # Remove rows where 'Risk' column contain no letters
     cleaned_df = ram[
-        ram['Likelihood'].str.contains(letter_pattern, na=False) &
-        ram['Impact'].str.contains(letter_pattern, na=False) &
-        ram['Likelihood Full'].str.contains(letter_pattern, na=False) &
-        ram['Impact Full'].str.contains(letter_pattern, na=False)
+        ram['Risk'].str.contains(letter_pattern, na=False)
     ]
 
-    # Remove rows where 'Heading' does not contain RAM keywords if 'Heading' is not missing
-    cleaned_df = cleaned_df[
-        cleaned_df['Heading'].isna() | 
-        (cleaned_df['Heading'].str.count(keyword_pattern, flags=re.IGNORECASE) >=2)
-    ]
+    # # Remove rows where 'Heading' does not contain RAM keywords if 'Heading' is not missing
+    # cleaned_df = cleaned_df[
+    #     cleaned_df['Heading'].isna() | 
+    #     (cleaned_df['Heading'].str.count(keyword_pattern, flags=re.IGNORECASE) >=2)
+    # ]
 
-    # Remove rows where 'Likelihood' or 'Impact' columns do not contain keywords from high, medium, low
-    cleaned_df = cleaned_df[
-        cleaned_df['Likelihood'].str.contains('|'.join(likelihood_impact_keywords), case=False, na=False) |
-        cleaned_df['Impact'].str.contains('|'.join(likelihood_impact_keywords), case=False, na=False)
-    ]
+    # # Remove rows where 'Likelihood' or 'Impact' columns do not contain keywords from high, medium, low
+    # cleaned_df = cleaned_df[
+    #     cleaned_df['Likelihood'].str.contains('|'.join(likelihood_impact_keywords), case=False, na=False) |
+    #     cleaned_df['Impact'].str.contains('|'.join(likelihood_impact_keywords), case=False, na=False)
+    # ]
 
     # Keep only the specified columns
     cleaned_df = cleaned_df[['Heading', 'Risk Type','Risk', 'Time Horizon','Likelihood', 'Likelihood Full', 'Impact', 'Impact Full','Policy Response']]
@@ -89,6 +84,18 @@ def clean_RAM(ram):
     logging.info(f"Rows after cleaning: {len(cleaned_df)}")
 
     return cleaned_df
+
+def log_retry_error(retry_state):
+    """
+    Callback function for tenacity's retry decorator to log retry attempts.
+    Logs the file being processed, attempt number, and the exception that caused the retry.
+    """
+    # retry_state.args[1] is the 'filepath' argument from the 'extract_ram' method.
+    filepath = retry_state.args[1]
+    logging.warning(
+        f"Error processing {filepath.name}, retrying (attempt {retry_state.attempt_number}). "
+        f"Exception: {retry_state.outcome.exception()}"
+    )
 
 class RAM_Processor():
     """
@@ -102,7 +109,8 @@ class RAM_Processor():
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=1, min=2, max=60), # Waits 2s, 4s, 8s ... up to 60s between retries
     retry=retry_if_exception_type((ResourceExhausted, ServiceUnavailable, InternalServerError)),
-    reraise=True # Reraise the last exception if all retries fail
+    reraise=True, # Reraise the last exception if all retries fail
+    before_sleep=log_retry_error # This will log the error before each retry.
     )
     def extract_ram(self, filepath,PROMPT,model_name="gemini-2.5-pro-preview-05-06"):
         response = self.client.models.generate_content(
@@ -122,7 +130,7 @@ if __name__ == "__main__":
 
     Extract_type = 'csv'  # or 'md' for markdown extraction
     # define output folder 
-    output_folder = pathlib.Path('/ephemeral/home/xiong/data/Fund/RAM_Table/RAM_Table_Examples_Outputs')
+    output_folder = pathlib.Path('/ephemeral/home/xiong/data/Fund/RAM_Table/RAM_Table_Examples_Outputs_v2')
     raw_output_folder = output_folder / 'raw'
     clean_output_folder = output_folder / 'clean'
     output_folder.mkdir(exist_ok=True, parents=True)
@@ -130,7 +138,7 @@ if __name__ == "__main__":
     clean_output_folder.mkdir(exist_ok=True, parents=True)
     
     # get file pathes,only ones that are not already processed:
-    pdf_folder = pathlib.Path('/ephemeral/home/xiong/data/Fund/RAM_Table/RAM_Table_Examples')
+    pdf_folder = pathlib.Path('/ephemeral/home/xiong/data/Fund/RAM_Table/RAM_Table_Examples_v2')
     pdf_files = [f for f in pdf_folder.glob("*.pdf") if f.is_file()]
     processed_files = {f.stem for f in clean_output_folder.glob("*")}
     pdf_files = [f for f in pdf_files if f.stem not in processed_files]
@@ -159,7 +167,7 @@ if __name__ == "__main__":
     cleaning_errors = []  # Track files that failed during cleaning step
     
     # Process each PDF file with tqdm
-    for pdf_file in tqdm(pdf_files[:10], desc="Processing PDF files"):
+    for pdf_file in tqdm(pdf_files, desc="Processing PDF files"):
         try:
             logging.info(f"Processing: {pdf_file.name}")
             # Extract RAM data
@@ -178,6 +186,8 @@ if __name__ == "__main__":
                 response_data = pd.read_csv(StringIO(extract_csv_content(raw_result)))
                 clean_result = clean_RAM(response_data)
                 clean_output_file = clean_output_folder / f"{pdf_file.stem}.csv"
+                if clean_result.empty:
+                    raise ValueError(f"No valid rows found in {pdf_file.name}")
                 clean_result.to_csv(clean_output_file, index=False)
                 logging.info(f"Saved clean result to {clean_output_file}")
             except Exception as e:
