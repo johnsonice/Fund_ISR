@@ -41,6 +41,8 @@
     * Split paragraphs into **staff views** (`paragraphs_sr`) and **authorities’ views** (`paragraphs_av`) according to the rule.
     * Flag entries as `av_uncertain` when using the fallback split method (rule 2).
 
+- Merge text data with all fundmental data 
+
 - Identify topics for each paragraphs:
     - convert doc data into paragraphs
         * Convert paragraph columns (`paragraphs_sa`, `paragraphs_bu`, `paragraphs_sr`, `paragraphs_av`) from string representations to Python lists.
