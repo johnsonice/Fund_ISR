@@ -1,0 +1,10 @@
+---
+description: CSR project specific general rules, including terminal, env, and other tools info
+globs:
+alwaysApply: true
+---
+
+# Terminal 
+- When run any shell commands, make sure to activate `traction` conda environment and run everything within `traction` environment.
+- When installing Python deps, prefer `python -m pip` over bare `pip`.
+
