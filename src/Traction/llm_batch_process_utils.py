@@ -1,9 +1,7 @@
 #%%
-import json,os,sys,time,glob
-from pathlib import Path
+import sys
 from typing import List, Dict, Any, Tuple, Callable, Type
-import asyncio,nest_asyncio
-from tqdm import tqdm
+import nest_asyncio
 from pydantic import BaseModel
 
 sys.path.insert(0, str('../../'))
@@ -11,12 +9,9 @@ import warnings
 warnings.filterwarnings("ignore")
 nest_asyncio.apply()
 import pandas as pd  # keep original usage
-from libs.prompt_utils import load_prompt, format_messages
+from libs.prompt_utils import format_messages
 from libs.llm_factory_openai import BatchAsyncLLMAgent  
-from libs.prompt_utils import load_prompt, format_messages 
-import config
-from dotenv import load_dotenv
-load_dotenv('../../.env') ## load api key from .env file
+
 
 #%%
 def _build_batch_messages_from_df(
@@ -69,7 +64,7 @@ def _build_batch_messages_from_df(
 
     return batch_messages, batch_ids
 
-async def _process_articles_async(
+async def _process_batch_async(
     agent: BatchAsyncLLMAgent,
     batch_messages: List[List[Dict[str, str]]],
     response_model: Type[BaseModel],
@@ -110,61 +105,3 @@ def _merge_ids_with_responses(ids: List[str], responses: List[Any]) -> List[Dict
 
 
 #%%
-
-if __name__ == "__main__":
-    from prompts.schema import TopicResponse
-    
-    TEST_MODE = True
-    # data_dir = config.data_dir
-    data_dir = Path('/data/home/xiong/data/Fund/CSR/Tractions/')
-    results_dir = data_dir / 'output'
-    prompt_path = "./prompts/topic_classification.md"
-    
-    ## load paragraphs from csv file
-    df_paragraphs = pd.read_csv(results_dir / 'df_paragraphs.csv')
-    df_paragraphs = df_paragraphs[df_paragraphs['text'].notna()]
-    df_paragraphs['id'] = df_paragraphs.index.astype(str)  # Ensure IDs are strings
-    if TEST_MODE:
-        df_paragraphs = df_paragraphs.sample(n=100, random_state=42)
-
-    ## load prompt template and build batched messages
-    prompt_messages_template = load_prompt(prompt_path).sections
-    batch_messages, batch_ids = _build_batch_messages_from_df(
-        df_paragraphs,
-        prompt_messages_template,
-        text_column='text',
-        id_column='id',  # Now used inside function
-        max_input_text_length=2000
-    )
-
-    ## initiate batch agent for async inference
-    model_args = {
-        "api_key": os.getenv('OPENAI_API_KEY'),
-        "model": 'gpt-5-nano',
-        "temperature": 1
-    }
-    batch_agent = BatchAsyncLLMAgent(**model_args)
-    
-    ## run a test connection to ensure the agent is set up correctly
-    asyncio.run(batch_agent.test_connection())
-    response = await batch_agent.get_response_content(batch_messages[0],
-                                                      reasoning_effort='low',
-                                                      response_format=TopicResponse,
-                                                      max_completion_tokens=2000)
-    print('reasoning:',response.reasoning)
-    for topic in response.topic_labels:
-        print(f"{topic.topic}: {topic.confidence}")
-        
-    ## async batch run 
-    responses = asyncio.run(
-            _process_articles_async(
-                batch_agent,
-                batch_messages,
-                response_model=TopicResponse,
-                batch_size=8,
-                max_completion_tokens=4000,
-                safe_mode=True,
-            )
-        )
-    ## merge id with batch responses 
-    merged_results = _merge_ids_with_responses(batch_ids, responses)

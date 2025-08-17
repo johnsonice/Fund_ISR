@@ -30,7 +30,7 @@ You are given a list of topics with their definition and key indicators as below
 ----------------
 ----------------
 
-Given a paragraph from a report published by the International Monetary Fund, please carefully analyze the paragraph and classify the provided paragraph using ONLY the provided topics. If the paragraph does not fit into any of the provided topics, assign "Other".
+Given a paragraph from a report published by the International Monetary Fund, please carefully analyze the paragraph and classify the provided paragraph using ONLY the provided topics. If the paragraph does not fit into any of the provided topics, assign **Other**.
 Try your best to assign only one topic to the paragraph. You can use multiple categories only if you are very confident that multiple topics are all extensively discussed by the majority of the paragraph.
 Please provide your reasoning for your classification first, and then provide the topic label and a confidence score from 0-100.
 
@@ -38,7 +38,7 @@ Please provide your reasoning for your classification first, and then provide th
 Respond **only** in JSON with following keys:
 ```json
 {{"reasoning": "<reasoning process>", 
-"topic_labels": [{{"topic_label":"<identified topic label>","confidence_score":<confidence score>}},...]}}
+"topic_labels": [{{"topic":"<identified topic label>","confidence":<confidence score>}},...]}}
 ```
 
 ## user

@@ -1,8 +1,13 @@
-from typing import List, Optional, Dict, Type
+from typing import List, Optional, Dict, Type, Literal
 from pydantic import BaseModel, Field
+from enum import Enum
 
 class TopicLabel(BaseModel):
-    topic: str = Field(..., description="Topic label from the predefined list")
+    topic: Literal["Economic Outlook", 
+                   "Monetary Policy", 
+                   "Fiscal Stance", 
+                   "Financial Stability", 
+                   "External Stance","Other"] = Field(..., description="Topic label from the predefined list")
     confidence: int = Field(..., description="Confidence score from 0-100", ge=0, le=100)
 
 class TopicResponse(BaseModel):
