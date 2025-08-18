@@ -15,13 +15,13 @@ load_dotenv('../../.env')
 import pandas as pd
 from openai import OpenAI
 from openai.lib._parsing._completions import type_to_response_format_param
-
+from pydantic import BaseModel
+from typing import Type
  
 from libs.prompt_utils import load_prompt
 from prompts.schema import TopicResponse
 from llm_batch_process_utils import _build_batch_messages_from_df
 from topic_identification import _convert_response_to_wide_df
-
 
 #%%
 
@@ -34,6 +34,7 @@ def create_batch_jsonl(
     temperature: float,
     max_input_text_length: int = 2000,
     endpoint: str = '/v1/chat/completions',
+    response_model: Type[BaseModel] = None,
 ) -> List[str]:
     """Create a JSONL file for OpenAI Batch with structured output.
 
@@ -51,8 +52,8 @@ def create_batch_jsonl(
     )
     # Ensure directory exists
     output_jsonl_path.parent.mkdir(parents=True, exist_ok=True)
-
-    response_format = type_to_response_format_param(TopicResponse)
+    if response_model:
+        response_format = type_to_response_format_param(response_model)
 
     with open(output_jsonl_path, 'w', encoding='utf-8') as f:
         for msg_id, messages in zip(batch_ids, batch_messages):
@@ -301,6 +302,7 @@ if __name__ == "__main__":
             temperature=args.temperature,
             max_input_text_length=args.max_input_length,
             endpoint=args.endpoint,
+            response_model=TopicResponse,
         )
         print(f"Wrote {len(ids)} requests to {jsonl_path}")
 
