@@ -58,3 +58,84 @@ class FiscalAgreementChainOfThoughtResponse(BaseModel):
     agreement: Literal["irrelevant", "disagreement exists", "mostly agree"] = Field(..., description="Level of agreement between IMF staff and country authorities on fiscal policy")
     disagreement_areas: str = Field(..., description="List of disagreement areas or empty string")
     reason: str = Field(..., description="Reasoning for the classification")
+    
+    
+PROMPT_REGISTRY: Dict[str, Dict[str, object]] = {
+    # Topic classification
+    "topic_classification": {
+        "prompt_file": "topic_classification.md",
+        "response_model": TopicResponse,
+    },
+
+    # Monetary stance
+    "monetary_stance_simple": {
+        "prompt_file": "monetary_stance_simple.md",
+        "response_model": MonetaryStanceResponse,
+    },
+    "monetary_stance_with_definitions": {
+        "prompt_file": "monetary_stance_with_definitions.md",
+        "response_model": MonetaryStanceResponse,
+    },
+    "monetary_stance_few_shot": {
+        "prompt_file": "monetary_stance_few_shot.md",
+        "response_model": MonetaryStanceResponse,
+    },
+    "monetary_stance_chain_of_thought": {
+        "prompt_file": "monetary_stance_chain_of_thought.md",
+        "response_model": MonetaryStanceChainOfThoughtResponse,
+    },
+
+    # Monetary agreement
+    "monetary_agreement_simple": {
+        "prompt_file": "monetary_agreement_simple.md",
+        "response_model": MonetaryAgreementResponse,
+    },
+    "monetary_agreement_with_definitions": {
+        "prompt_file": "monetary_agreement_with_definitions.md",
+        "response_model": MonetaryAgreementResponse,
+    },
+    "monetary_agreement_few_shot": {
+        "prompt_file": "monetary_agreement_few_shot.md",
+        "response_model": MonetaryAgreementResponse,
+    },
+    "monetary_agreement_chain_of_thought": {
+        "prompt_file": "monetary_agreement_chain_of_thought.md",
+        "response_model": MonetaryAgreementChainOfThoughtResponse,
+    },
+
+    # Fiscal stance
+    "fiscal_stance_simple": {
+        "prompt_file": "fiscal_stance_simple.md",
+        "response_model": FiscalStanceResponse,
+    },
+    "fiscal_stance_with_definitions": {
+        "prompt_file": "fiscal_stance_with_definitions.md",
+        "response_model": FiscalStanceResponse,
+    },
+    "fiscal_stance_few_shot": {
+        "prompt_file": "fiscal_stance_few_shot.md",
+        "response_model": FiscalStanceResponse,
+    },
+    "fiscal_stance_chain_of_thought": {
+        "prompt_file": "fiscal_stance_chain_of_thought.md",
+        "response_model": FiscalStanceChainOfThoughtResponse,
+    },
+
+    # Fiscal agreement
+    "fiscal_agreement_simple": {
+        "prompt_file": "fiscal_agreement_simple.md",
+        "response_model": FiscalAgreementResponse,
+    },
+    "fiscal_agreement_with_definitions": {
+        "prompt_file": "fiscal_agreement_with_definitions.md",
+        "response_model": FiscalAgreementResponse,
+    },
+    "fiscal_agreement_few_shot": {
+        "prompt_file": "fiscal_agreement_few_shot.md",
+        "response_model": FiscalAgreementResponse,
+    },
+    "fiscal_agreement_chain_of_thought": {
+        "prompt_file": "fiscal_agreement_chain_of_thought.md",
+        "response_model": FiscalAgreementChainOfThoughtResponse,
+    },
+}
