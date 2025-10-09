@@ -35,18 +35,12 @@ class MonetaryAgreementChainOfThoughtResponse(BaseModel):
 
 # Fiscal Policy Classification Schemas
 class FiscalStanceResponse(BaseModel):
-    staff_current: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary"] = Field(..., description="IMF staff current fiscal policy stance")
-    staff_future: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary"] = Field(..., description="IMF staff future fiscal policy stance")
-    authority_current: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary"] = Field(..., description="Country authority current fiscal policy stance")
-    authority_future: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary"] = Field(..., description="Country authority future fiscal policy stance")
-    agreement_other: Literal["agree", "disagree", "neutral", "irrelevant"] = Field(..., description="Agreement on non-stance fiscal policy issues")
+    stance_current: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary", "unclear", "irrelevant"] = Field(..., description="Current fiscal policy stance")
+    stance_future: Literal["tightening", "tightening bias", "no change", "loosening bias", "loosening", "unclear", "irrelevant"] = Field(..., description="Future fiscal policy direction")
 
 class FiscalStanceChainOfThoughtResponse(BaseModel):
-    staff_current: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary"] = Field(..., description="IMF staff current fiscal policy stance")
-    staff_future: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary"] = Field(..., description="IMF staff future fiscal policy stance")
-    authority_current: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary"] = Field(..., description="Country authority current fiscal policy stance")
-    authority_future: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary"] = Field(..., description="Country authority future fiscal policy stance")
-    agreement_other: Literal["agree", "disagree", "neutral", "irrelevant"] = Field(..., description="Agreement on non-stance fiscal policy issues")
+    stance_current: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary", "unclear", "irrelevant"] = Field(..., description="Current fiscal policy stance")
+    stance_future: Literal["tightening", "tightening bias", "no change", "loosening bias", "loosening", "unclear", "irrelevant"] = Field(..., description="Future fiscal policy direction")
     reason: str = Field(..., description="Reasoning for the classifications")
 
 # Fiscal Agreement Classification Schemas

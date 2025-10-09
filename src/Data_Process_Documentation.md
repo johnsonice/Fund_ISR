@@ -15,6 +15,8 @@
      - A flattened list of paragraph texts plus list-item texts
 
 - Buff Statement extraction steps:
+    - In COM's xml packages, look at xmls other than the main staff report xml.
+    
     - Path 1 (Title-based): If any <article-title> inside <body> literally contains “statement by” or “statement on” (case-insensitive), we treat the entire <body> as the target and return all non-empty paragraph texts.
 
     - Path 2 (Lead-paragraph-based): If the titles don’t say “statement by/on”, we look for the first paragraph whose text starts with that phrase (using STATEMENT_RE: ^statement (by|on)\b). If found, we return the text from every subsequent paragraph after that “lead” paragraph.

@@ -9,7 +9,7 @@ import warnings
 warnings.filterwarnings("ignore")
 nest_asyncio.apply()
 import pandas as pd  # keep original usage
-from libs.prompt_utils import format_messages
+from libs.prompt_utils import load_prompt, format_messages
 from libs.llm_factory_openai import BatchAsyncLLMAgent  
 
 
@@ -64,6 +64,106 @@ def _build_batch_messages_from_df(
 
     return batch_messages, batch_ids
 
+
+def _build_batch_messages_from_df_flexible(
+    df: pd.DataFrame,
+    prompt_template: Dict[str, str],
+    *,
+    column_mapping: Dict[str, str],
+    id_column: str | None = None,
+    max_text_length: int = 8000,
+) -> Tuple[List[List[Dict[str, str]]], List[str]]:
+    """Convert a dataframe into LLM-ready message batches with flexible column mapping.
+    
+    This function supports multiple columns mapped to template placeholders, enabling
+    complex prompts that require multiple text fields (e.g., staff vs authority views).
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        Input dataframe containing the columns to be mapped.
+    prompt_template : dict
+        Template dict with keys like 'system', 'user'. The 'user' and/or 'system' 
+        sections can contain placeholders (e.g., {STAFF}, {AUTHORITY}, {COUNTRY}).
+    column_mapping : dict[str, str]
+        Maps template placeholder names (UPPERCASE) to dataframe column names.
+        Example: {'STAFF': 'staff_text', 'AUTHORITY': 'authority_text', 'COUNTRY': 'country'}
+        All keys should be uppercase to match template placeholders.
+    id_column : str | None
+        Column to use as identifier. If None, dataframe index is used.
+    max_text_length : int
+        Truncate text fields to this many characters. Applied to all text-like columns.
+
+    Returns
+    -------
+    batch_messages : list[list[dict]]
+        List of message arrays ready for LLM processing.
+    batch_ids : list[str]
+        Corresponding identifiers for each message.
+
+    Examples
+    --------
+    >>> column_mapping = {
+    ...     'STAFF': 'staff_text',
+    ...     'AUTHORITY': 'authority_text', 
+    ...     'COUNTRY': 'country',
+    ...     'YEAR': 'year'
+    ... }
+    >>> messages, ids = build_batch_messages_from_df_flexible(
+    ...     df, prompt_template, column_mapping=column_mapping, id_column='index'
+    ... )
+    """
+    # Validate that all mapped columns exist in dataframe
+    missing_cols = [col for col in column_mapping.values() if col not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Columns {missing_cols} not found in dataframe. Available: {list(df.columns)}")
+    
+    if id_column is not None and id_column not in df.columns:
+        raise ValueError(f"ID column '{id_column}' not found in dataframe. Available: {list(df.columns)}")
+
+    batch_messages: List[List[Dict[str, str]]] = []
+    batch_ids: List[str] = []
+
+    # Iterate rows
+    for idx, row in df.iterrows():
+        row_id = row[id_column] if id_column else idx
+        
+        # Build mapping dict: PLACEHOLDER -> actual value from row
+        format_data = {}
+        for placeholder, col_name in column_mapping.items():
+            raw_value = row[col_name]
+            value = str(raw_value) if raw_value is not None else ""
+            # Truncate text-like fields (strings that are not just numbers/years)
+            if isinstance(raw_value, str):  # heuristic: long strings are text
+                value = value.strip()[:max_text_length]
+            format_data[placeholder] = value
+        
+        # Clone template and format both system and user sections
+        this_template = prompt_template.copy()
+        
+        # Format system prompt if it exists and has placeholders
+        if "system" in this_template:
+            try:
+                this_template["system"] = this_template["system"].format(**format_data)
+            except KeyError as e:
+                # Some placeholders might only be in user section
+                pass
+        
+        # Format user prompt (required)
+        if "user" not in this_template:
+            raise KeyError("Prompt template must contain a 'user' field.")
+        try:
+            this_template["user"] = this_template["user"].format(**format_data)
+        except KeyError as e:
+            # Some placeholders might only be in system section
+            pass
+        
+        messages = format_messages(this_template, add_schema=True)
+        batch_messages.append(messages)
+        batch_ids.append(str(row_id))
+
+    return batch_messages, batch_ids
+
 async def _process_batch_async(
     agent: BatchAsyncLLMAgent,
     batch_messages: List[List[Dict[str, str]]],
@@ -103,5 +203,3 @@ def _merge_ids_with_responses(ids: List[str], responses: List[Any]) -> List[Dict
         merged.append(record)
     return merged
 
-
-#%%
