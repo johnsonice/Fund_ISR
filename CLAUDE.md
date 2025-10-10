@@ -48,8 +48,12 @@ pip install -r requirements.txt
    python src/Traction/paragraph_back2_doc.py
    ```
 
-### Development
+### Evaluation & Development
 
+- **Evaluation Pipeline**: `notebooks/Traction/evaluate_fiscal_monetray_pipeline.ipynb`
+  - Function: `evaluate_prompt_and_model(prompt_key, model_name, data_dir, use_full_dataset=True)`
+  - Supports monetary/fiscal stance and agreement tasks
+  - Results in `notebooks/Traction/evaluation_results.md`
 - Run Jupyter notebooks from `notebooks/Traction/` for demos and experimentation
 - Logs are automatically created at: `src/Traction/log/{USER}/{YYYY-MM-DD}/Exp-{HH:MM}.log`
 
@@ -87,11 +91,13 @@ pip install -r requirements.txt
 - Both use shared utilities in `llm_batch_process_utils.py`
 
 **4. Schema & Prompts (`src/Traction/prompts/`):**
-- `schema.py`: Pydantic models defining LLM response structures
+- `schema.py`: Pydantic models and PROMPT_REGISTRY mapping prompt keys to files/models
   - `TopicResponse`: Topic classification with confidence scores (0-100)
   - `MonetaryStanceResponse`, `FiscalStanceResponse`: Policy stance classification
   - `MonetaryAgreementResponse`, `FiscalAgreementResponse`: Agreement detection
-- Markdown prompt templates in `prompts/*.md` with detailed classification guidelines
+  - Chain-of-thought variants include reasoning field
+- Markdown prompt templates: 4 variants per task (simple, with_definitions, few_shot, chain_of_thought)
+- **Recommended**: Use few_shot prompts for best performance (see `notebooks/Traction/evaluation_results.md`)
 
 **5. Post-Processing (`src/Traction/paragraph_back2_doc.py`):**
 - Aggregates paragraph-level classifications to document-level summaries
@@ -117,7 +123,7 @@ pip install -r requirements.txt
 - Handles concurrent async API calls with progress tracking
 - Supports structured output via Pydantic models
 - Built-in retry logic and error handling
-- Default model: `gpt-4o-mini`, temperature: 0
+- Recommended models: `gpt-4o` (best accuracy), `gpt-4o-mini` (cost-effective), `gpt-4o-nano` (budget)
 
 **Batch Processing Workflow:**
 1. Build batch messages from DataFrame (`_build_batch_messages_from_df`)
@@ -159,3 +165,21 @@ External data structure (configured in `config.py`):
 3. **Batch API:** Cost-effective processing for large datasets via OpenAI Batch API
 4. **Wide Format Conversion:** Pivot long-form results to wide DataFrame with topic columns
 5. **Logging:** Automatic timestamped logs organized by user and date
+
+## Model & Prompt Selection Guide
+
+Based on evaluation results (`notebooks/Traction/evaluation_results.md`):
+
+**Agreement Classification:**
+- GPT-4o + Few Shot: 74.74% accuracy (best)
+- GPT-4o-mini + Few Shot: 71.97% accuracy (cost-effective, -2.8%)
+- GPT-4o-nano + Few Shot: 66.44% accuracy (budget, -8.3%)
+
+**Stance Classification:**
+- GPT-4o + Few Shot: 74.05% accuracy (best, strongly recommended)
+- GPT-4o-mini + Few Shot: 65.40% accuracy (significant drop, -8.6%)
+
+**Key Findings:**
+- Always use few_shot prompts (consistently best across all tasks)
+- GPT-4o worth premium for stance tasks (larger performance gap)
+- Avoid "with_definitions" prompts (consistently worst)

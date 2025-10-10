@@ -1,189 +1,115 @@
 # AI Tools for 2025 Interim Surveillance Review
 
 ## Overview
-This project develops AI-powered tools for the 2025 Interim Surveillance Review (ISR), specifically focusing on automated text analysis and topic classification of Article IV (AIV) consultation reports. The system processes IMF staff reports, buff statements, and authorities' views to extract structured insights on macroeconomic topics including Economic Outlook, Monetary Policy, Fiscal Stance, Financial Stability, and External Stance.
+AI-powered text analysis pipeline for Article IV consultation reports. Automatically classifies paragraphs into macroeconomic topics (Economic Outlook, Monetary Policy, Fiscal Stance, Financial Stability, External Stance) and extracts policy stance/agreement metrics using OpenAI language models.
 
 ## Key Features
-- **Automated Document Processing**: Extract and structure text from XML-formatted IMF documents
-- **AI-Powered Topic Classification**: Use OpenAI's language models to classify paragraphs into predefined macroeconomic topic categories
-- **Batch Processing Support**: Handle large-scale document analysis through OpenAI's Batch API
-- **Multi-format Output**: Generate both paragraph-level and document-level analytical outputs
-- **Extensible Framework**: Modular design supporting additional topic categories and document types
+- **Topic Classification**: Classify paragraphs into 6 predefined macroeconomic categories with confidence scores
+- **Stance Detection**: Extract monetary/fiscal policy stance (tightening/loosening/neutral) from Staff Appraisal and Authorities' Views
+- **Agreement Analysis**: Identify staff-authorities agreement/disagreement on policy recommendations
+- **Batch Processing**: Cost-effective large-scale analysis using OpenAI Batch API
+- **Structured Output**: Pydantic-validated responses with paragraph and document-level aggregations
 
 ## Environment Setup
 
-1. **Create a New Virtual Environment:**
-   - Set up a new virtual environment for this project.
-   - Activate the environment and install required packages using:
-     ```
-     pip install -r requirements.txt
-     ```
+**Conda Environment:**
+```bash
+conda activate traction
+pip install -r requirements.txt
+```
 
-2. **Download Data:**
-   - Data for this project should be downloaded and stored in the same root folder as this repository.
-   - Use the following command to download the data (link will be provided soon):
-     ```
-     wget [link pending]
-     ```
-   - Provide your OpenAI API key via a `.env` file at the project root:
-     ```
-     OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxx
-     ```
+**API Configuration:**
+Create `.env` file at project root:
+```
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxx
+```
+
+**Data Directory:**
+External data should be placed at `~/dev/Fund/CSR/Tractions/` (Linux) or configured OneDrive path (Windows). See `src/Traction/config.py` for details.
 
 ## Project Structure
 
-### Core Directories
+- **`libs/`** - Reusable utilities (LLM wrappers, prompt loaders, text processing)
+- **`src/Traction/`** - Main pipeline: preprocessing, topic classification, stance/agreement extraction, aggregation
+- **`src/Traction/prompts/`** - Pydantic schemas and markdown prompt templates (4 variants per task: simple, with_definitions, few_shot, chain_of_thought)
+- **`notebooks/Traction/`** - Evaluation notebooks and demos
+- **`src/Others/`** - Experimental scripts
 
-- **`libs/`** - Core utility libraries and components:
-  - `llm_factory_openai.py`: OpenAI API client with async batch processing capabilities
-  - `llm_utils.py` & variants: LLM interaction utilities with retry logic and logging
-  - `prompt_utils.py`: Prompt template management and loading
-  - `clean_text_utils.py`: Text preprocessing and cleaning functions
-  - `utils_pdf.py`: PDF document processing utilities
-  - `utils.py`: General-purpose helper functions
+## Pipeline Overview
 
-- **`src/`** - Main source code directory:
-  - `Traction/`: Primary pipeline for Article IV document processing
-  - `Others/`: Additional tools and experimental scripts for document analysis
+**Data Flow:**
+1. XML documents → `data_preprocess.py` → paragraph CSV
+2. Paragraphs → `topic_identification*.py` → classified CSV with confidence scores
+3. Classified data → `paragraph_back2_doc.py` → document-level summaries
 
-- **`notebooks/`** - Jupyter notebooks for development and testing:
-  - `Traction/`: Notebooks for the main pipeline development and demos
-  - `Others/`: Experimental notebooks and one-off analyses
+**Key Scripts:**
+- `data_preprocess.py` - Extract paragraphs from XML (Staff Appraisal, Buff Statement, Staff Report, Authorities' Views)
+- `topic_identification.py` / `topic_identification_batch.py` - Topic classification (async or batch)
+- `paragraph_back2_doc.py` - Aggregate to document level
 
-- **Configuration Files:**
-  - `requirements.txt`: Python package dependencies
-  - `.env`: Environment variables (OpenAI API key, etc.)
+**Topic Categories:**
+1. Economic Outlook (GDP, growth, forecasts)
+2. Monetary Policy (interest rates, inflation, central bank)
+3. Fiscal Stance (spending, debt, budget)
+4. Financial Stability (banking, financial risks)
+5. External Stance (balance of payments, exchange rates)
+6. Other
 
-### Traction Pipeline (`src/Traction/`)
-The main processing pipeline for Article IV consultation document analysis.
+## Usage
 
-#### Core Components
+**Complete Pipeline:**
+```bash
+conda activate traction
 
-**Configuration & Setup:**
-- `config.py`: Cross-platform data directory configuration (Windows/Linux paths)
+# Step 1: Extract paragraphs from XML
+python src/Traction/data_preprocess.py
 
-**Data Processing:**
-- `data_preprocess.py`: XML document parser and text extractor
-  - Processes Article IV documents from `results_v2/` and `results_v5/` folders
-  - Extracts Staff Appraisal, Buff Statement, Staff Report body, and Authorities' Views
-  - Outputs: `df_aiv.csv` (document-level), `df_paragraphs.csv` (paragraph-level)
+# Step 2: Classify topics (choose one)
+python src/Traction/topic_identification.py              # Async (fast for small batches)
+python src/Traction/topic_identification_batch.py        # Batch API (cost-effective, large scale)
+python src/Traction/topic_identification.py --test-mode  # Test mode (sample data)
 
-**Topic Classification:**
-- `topic_identification.py`: Asynchronous LLM-based topic classification
-  - Uses OpenAI API with structured Pydantic schema validation
-  - Processes paragraphs through predefined macroeconomic topic taxonomy
-- `topic_identification_batch.py`: Batch processing variant for large-scale analysis
-  - Leverages OpenAI Batch API for cost-efficient processing
-  - Includes batch creation, submission, monitoring, and result processing
-- `llm_batch_process_utils.py`: Utilities for batch processing workflows
-
-**Schema & Prompts:**
-- `prompts/schema.py`: Pydantic models defining structured LLM response format
-  - `TopicLabel`: Individual topic classification with confidence scores
-  - `TopicResponse`: Complete response structure with reasoning and topic labels
-- `prompts/topic_classification.md`: Comprehensive prompt template with:
-  - Six predefined topic categories (Economic Outlook, Monetary Policy, Fiscal Stance, Financial Stability, External Stance, Other)
-  - Detailed definitions and key indicators for each topic
-  - Classification guidelines and examples
-
-**Post-processing:**
-- `paragraph_back2_doc.py`: Aggregates paragraph-level classifications to document-level summaries
-
-#### Data Requirements
-
-The pipeline expects the following external data structure:
-```
-/data/home/xiong/data/Fund/CSR/Tractions/
-├── ArticleIV_xml_updated/
-│   ├── results_v2/          # XML documents (earlier version)
-│   └── results_v5/          # XML documents (later version)
-├── text_collection/
-│   └── IMF_Main_MetaData_*.xlsx  # Document metadata
-└── output/                  # Generated outputs (auto-created)
+# Step 3: Aggregate to document level
+python src/Traction/paragraph_back2_doc.py
 ```
 
-## Usage Guide
+**Outputs:**
+- `output/df_paragraphs.csv` - Paragraph-level text
+- `output/paragraph_with_sector*.csv` - Classified paragraphs with confidence scores
+- `output/document_by_type_sector.csv` - Document-level aggregations
 
-### Quick Start
-1. **Environment Setup:**
-   ```bash
-   # Install dependencies
-   pip install -r requirements.txt
-   
-   # Set up API key
-   echo "OPENAI_API_KEY=your_api_key_here" > .env
-   ```
+**Evaluation:**
+Use `notebooks/Traction/evaluate_fiscal_monetray_pipeline.ipynb` to run evaluations. Results in `notebooks/Traction/evaluation_results.md`.
 
-2. **Run the Complete Pipeline:**
-   ```bash
-   # Step 1: Extract and preprocess documents
-   python src/Traction/data_preprocess.py
-   
-   # Step 2: Classify topics (choose one method)
-   # Option A: Async processing (faster for small batches)
-   python src/Traction/topic_identification.py
-   
-   # Option B: Batch processing (cost-effective for large datasets)
-   python src/Traction/topic_identification_batch.py
-   
-   # Step 3: Aggregate results to document level
-   python src/Traction/paragraph_back2_doc.py
-   ```
+## Model Selection Guide
 
-### Pipeline Outputs
+Based on evaluation results (`notebooks/Traction/evaluation_results.md`):
 
-**After Data Preprocessing:**
-- `output/df_aiv.csv`: Document-level metadata and paragraph counts
-- `output/df_paragraphs.csv`: Individual paragraphs ready for classification
+**Agreement Classification:**
+- GPT-5 + Few Shot: 74.74% (best)
+- GPT-5-Mini + Few Shot: 71.97% (cost-effective, -2.8%)
+- GPT-5-Nano + Few Shot: 66.44% (budget, -8.3%)
 
-**After Topic Classification:**
-- `output/paragraph_with_sector.csv` (async) or `output/paragraph_with_sector_batch.csv` (batch)
-  - Original paragraph data plus topic confidence scores (0-100)
-  - Binary dummy variables for topics with confidence > 30%
-  - Topics: Economic Outlook, Monetary Policy, Fiscal Stance, Financial Stability, External Stance, Other
+**Stance Classification:**
+- GPT-5 + Few Shot: 74.05% (best, strongly recommended)
+  - Current stance: 78.55%, Future stance: 69.55%
+- GPT-5-Mini + Few Shot: 65.40% (-8.6%, significant drop)
 
-**After Document Aggregation:**
-- `output/document_by_type_sector.csv`: Document-level topic summaries by document type
+**Recommendations:**
+- Always use `few_shot` prompts (consistently best across all models/tasks)
+- GPT-5 worth premium for stance tasks (larger performance gap vs smaller models)
+- Avoid `with_definitions` prompts (consistently worst performer)
 
-### Logging and Monitoring
-- Experiment logs: `src/Traction/log/{USER}/{YYYY-MM-DD}/Exp-{HH:MM}.log`
-- Batch processing status and progress tracking included
+## Tasks
 
-## Technical Details
+**Completed:**
+- [x] ~~Replicate Xiaorui's topic tagging workflow with full reproducibility~~
+- [x] ~~Implement monetary and fiscal policy stance extraction with agreement metrics~~
+- [x] ~~Extend document ingestion to cover 2024-2025 Article IV reports~~
+- [x] ~~Develop External Sector methodology for balance/exchange rate analysis~~
 
-### Topic Classification Schema
-The system classifies text into six predefined macroeconomic categories:
-
-1. **Economic Outlook**: GDP growth, business cycle analysis, economic forecasts, recession risks
-2. **Monetary Policy**: Interest rates, inflation targeting, central bank actions, quantitative easing
-3. **Fiscal Stance**: Government spending, debt sustainability, fiscal consolidation, budget balance
-4. **Financial Stability**: Banking sector health, financial sector risks, systemic risk assessment
-5. **External Stance**: Balance of payments, exchange rates, external debt, trade balance
-6. **Other**: Topics not covered by the above categories
-
-### Dependencies
-Key Python packages (see `requirements.txt` for complete list):
-- `openai>=1.8.0`: OpenAI API client
-- `pandas>=2.0.3`: Data manipulation and analysis
-- `pydantic`: Data validation and schema enforcement
-- `beautifulsoup4>=4.13.4`: XML/HTML parsing
-- `tqdm>=4.66.1`: Progress bars
-- `python-docx>=0.8.11`: Document processing
-- `transformers>=4.32.1`: NLP model utilities
-
-## Development Roadmap
-
-### Current Tasks
-- [ ] **Task 1**: Replicate Xiaorui's topic tagging workflow with full reproducibility
-- [ ] **Task 2**: Implement monetary and fiscal policy stance extraction with agreement metrics
-- [ ] **Task 3**: Extend document ingestion to cover 2024-2025 Article IV reports
-- [ ] **Task 4**: Develop External Sector methodology for balance/exchange rate analysis
-
-### Future Enhancements
-- Multi-language support for non-English IMF documents
-- Integration with additional document formats (PDF, DOCX)
-- Real-time processing capabilities for new document releases
-- Enhanced visualization tools for analytical outputs
-
-## Contact
-- chuang@imf.org
+**Pending:**
+- [ ] Investigate performance gap in stance prediction (GPT-4o vs GPT-4o-mini: -8.6%)
+- [ ] Build complete pipeline for fiscal policy stance and agreement classification
+- [ ] Collect and process Article IV reports from 2023-2025 to extend time series
+- [ ] Reproduce all data visualizations with updated results
