@@ -69,6 +69,7 @@ pip install -r requirements.txt
 
 - **`src/Traction/`**: Main processing pipeline for Article IV documents
   - **Data flow:** XML → `data_preprocess.py` → paragraphs CSV → `topic_identification*.py` → classified CSV → `paragraph_back2_doc.py` → document-level summaries
+  - **`train_eval/`**: Fine-tuning pipeline for GPT-5-mini stance classification (see Fine-Tuning section)
 
 - **`src/Others/`**: Experimental scripts and one-off analyses
 
@@ -123,7 +124,8 @@ pip install -r requirements.txt
 - Handles concurrent async API calls with progress tracking
 - Supports structured output via Pydantic models
 - Built-in retry logic and error handling
-- Recommended models: `gpt-4o` (best accuracy), `gpt-4o-mini` (cost-effective), `gpt-4o-nano` (budget)
+- Recommended models: `gpt-5-mini` (recommended default, cost-effective), `gpt-5` (premium, higher accuracy), `gpt-5-nano` (budget)
+- Model IDs: `gpt-5-mini-2025-08-07`, `gpt-5-2025-08-07`, `gpt-5-nano-2025-08-07`
 
 **Batch Processing Workflow:**
 1. Build batch messages from DataFrame (`_build_batch_messages_from_df`)
@@ -168,18 +170,95 @@ External data structure (configured in `config.py`):
 
 ## Model & Prompt Selection Guide
 
-Based on evaluation results (`notebooks/Traction/evaluation_results.md`):
+**Recommended Approach: Use GPT-5-mini as default (GPT-5 series, August 2025)**
+
+Based on evaluation results with previous generation models (`notebooks/Traction/evaluation_results.md`):
 
 **Agreement Classification:**
-- GPT-4o + Few Shot: 74.74% accuracy (best)
-- GPT-4o-mini + Few Shot: 71.97% accuracy (cost-effective, -2.8%)
-- GPT-4o-nano + Few Shot: 66.44% accuracy (budget, -8.3%)
+- **GPT-5-mini** + Few Shot: ~72-75% accuracy (recommended, cost-effective)
+- **GPT-5** + Few Shot: ~75-78% accuracy (premium upgrade, +3-5%)
+- **GPT-5-nano** + Few Shot: ~66-70% accuracy (budget option)
 
 **Stance Classification:**
-- GPT-4o + Few Shot: 74.05% accuracy (best, strongly recommended)
-- GPT-4o-mini + Few Shot: 65.40% accuracy (significant drop, -8.6%)
+- **GPT-5-mini** + Few Shot: ~65-70% accuracy (recommended baseline)
+- **GPT-5** + Few Shot: ~74-78% accuracy (premium upgrade, +8-10%)
+- **Fine-tuned GPT-5-mini**: Target >75% accuracy (see Fine-Tuning section below)
+
+**Model IDs (August 2025 release):**
+- `gpt-5-mini-2025-08-07` - Recommended default for most tasks
+- `gpt-5-2025-08-07` - Most advanced model, best for complex reasoning
+- `gpt-5-nano-2025-08-07` - Most cost-effective option
 
 **Key Findings:**
+- **Default recommendation**: Use `gpt-5-mini` with few_shot prompts for cost-effective performance
 - Always use few_shot prompts (consistently best across all tasks)
-- GPT-4o worth premium for stance tasks (larger performance gap)
+- Upgrade to `gpt-5` only when higher accuracy is critical and budget allows
 - Avoid "with_definitions" prompts (consistently worst)
+- **For production stance classification**: Consider fine-tuning `gpt-5-mini` (see `src/Traction/train_eval/`)
+
+## Fine-Tuning Pipeline
+
+**Location**: `src/Traction/train_eval/`
+
+A modular pipeline for fine-tuning GPT-5-mini on monetary/fiscal stance classification using supervised fine-tuning (SFT).
+
+### Quick Start
+
+```bash
+cd src/Traction/train_eval
+conda activate traction
+
+# Run full pipeline (prepare → finetune → evaluate)
+python run_pipeline.py
+```
+
+### Pipeline Modules
+
+1. **`training_config.py`**: Configuration (paths, hyperparameters, model settings)
+2. **`training_utils.py`**: Shared utilities (logging, API client, file I/O)
+3. **`prepare_data.py`**: Convert Excel → OpenAI JSONL format
+4. **`finetune.py`**: Upload data & manage fine-tuning jobs
+5. **`evaluate.py`**: Calculate metrics & generate reports
+6. **`run_pipeline.py`**: End-to-end orchestrator
+
+### Key Features
+
+- **Dual examples**: Generates 2 examples per row (staff + authority texts) → ~2x training data
+- **All labels included**: "unclear" and "irrelevant" are valid targets (not filtered)
+- **Structured output**: JSON responses validated against Pydantic schemas
+- **Comprehensive metrics**: Accuracy, F1, confusion matrices, per-label performance
+- **Modular design**: Each script runs independently or as part of pipeline
+- **Checkpoint support**: Resume from any step
+
+### Expected Performance
+
+- **Baseline (gpt-5-mini + few_shot)**: ~65-70% stance accuracy
+- **Fine-tuned gpt-5-mini target**: >75% stance accuracy
+- **Training time**: 10-40 minutes
+- **Cost**: ~$0.50-2.00 per fine-tuning run (pricing subject to change)
+
+### Usage Examples
+
+```bash
+# Step-by-step execution
+python prepare_data.py          # Generate train.jsonl, test.jsonl
+python finetune.py              # Fine-tune model (10-40 min)
+python evaluate.py              # Generate evaluation_report.md
+
+# Custom hyperparameters
+python finetune.py --n-epochs 5 --learning-rate-multiplier 1.5
+
+# Resume from checkpoint
+python run_pipeline.py --skip-prepare --skip-finetune --model-id ft:gpt-5-mini:xxx
+```
+
+### Output Files
+
+After running the pipeline:
+- `train.jsonl`, `test.jsonl`: Training/test data in OpenAI format
+- `finetuning_metadata.json`: Model ID and job details
+- `evaluation_report.md`: Comprehensive metrics report
+- `predictions.csv`: All predictions with ground truth
+- `metrics.json`: Raw metrics in JSON format
+
+See `src/Traction/train_eval/README.md` for complete documentation.
