@@ -130,6 +130,19 @@ True: Irrelevant           4               19            0
 
 ---
 
+### Fine-Tuned Model Evaluation Report
+
+**Model**: `ft:gpt-4.1-mini-2025-04-14:protagolabs:monetary-stance:CTwfIXWf`
+**Evaluation Date**: 2025-10-27 00:07:36
+
+## Structured Output
+
+| Task | Standard Acc | Standard F1 | Combined Acc | Combined F1 |
+|------|--------------|-------------|--------------|-------------|
+| stance_current | 0.7845 | 0.7868 | 0.8276 | 0.8276 |
+| stance_future | 0.7328 | 0.7268 | 0.7759 | 0.7698 |
+
+
 ## Key Findings
 
 ### Agreement Task Performance
