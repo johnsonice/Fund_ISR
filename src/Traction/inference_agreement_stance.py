@@ -42,6 +42,16 @@ from topic_identification_batch import (
     download_batch_results,
 )
 
+# Common column labels used across agreement/stance flows
+STAFF_COL = 'staff'
+AUTHORITY_COL = 'buff'
+TOPIC_COL = 'topic'
+COUNTRY_KEY = 'COUNTRY'
+YEAR_KEY = 'YEAR'
+STAFF_TEXT_KEY = 'STAFF_TEXT'
+AUTHORITY_TEXT_KEY = 'AUTHORITY_TEXT'
+TEXT_AUTHOR_KEY = 'TEXT_AUTHOR'
+
 
 #%%
 def _pivot_agreement_rows(df: pd.DataFrame, *, id_cols: List[str], type_col: str, text_col: str) -> pd.DataFrame:
@@ -64,12 +74,10 @@ def _pivot_agreement_rows(df: pd.DataFrame, *, id_cols: List[str], type_col: str
                           values=text_col, 
                           aggfunc=lambda x: ' '.join(x))
     wide = wide.reset_index()
-
     # Ensure expected columns exist
-    for col in ['staff', 'buff']:
+    for col in [STAFF_COL, AUTHORITY_COL]:
         if col not in wide.columns:
             wide[col] = None
-            
     return wide
 #%%
 
@@ -172,19 +180,31 @@ def _post_process_results_jsonl(results_jsonl_path: Path) -> List[Dict[str, Any]
     return merged
 #%%
 
-def _select_prompt_and_response(task: str, domain: str) -> Tuple[str, Type[BaseModel]]:
-    """Return (prompt_key, response_model) based on task and domain."""
-    if task == 'agreement':
-        if domain == 'monetary':
-            return 'monetary_agreement_few_shot', MonetaryAgreementResponse
-        else:
-            return 'fiscal_agreement_few_shot', FiscalAgreementResponse
-    elif task == 'stance':
-        if domain == 'monetary':
-            return 'monetary_stance_few_shot', MonetaryStanceResponse
-        else:
-            return 'fiscal_stance_few_shot', FiscalStanceResponse
-    raise ValueError('Unknown task/domain')
+_RESPONSE_MODEL_BY_TASK_DOMAIN: Dict[Tuple[str, str], Type[BaseModel]] = {
+    ('agreement', 'monetary'): MonetaryAgreementResponse,
+    ('agreement', 'fiscal'): FiscalAgreementResponse,
+    ('stance', 'monetary'): MonetaryStanceResponse,
+    ('stance', 'fiscal'): FiscalStanceResponse,
+}
+
+
+def _select_prompt_and_response(task: str, domain: str, prompt_variant: str = 'few_shot') -> Tuple[str, Type[BaseModel]]:
+    """Return (prompt_key, response_model) based on task, domain, and prompt variant."""
+    if task not in ('agreement', 'stance'):
+        raise ValueError(f"Unknown task: {task}")
+    if domain not in ('monetary', 'fiscal'):
+        raise ValueError(f"Unknown domain: {domain}")
+
+    prompt_key = f"{domain}_{task}_{prompt_variant}"
+    # Fail fast if the prompt variant is not registered; avoids silent fallback at runtime
+    if prompt_key not in PROMPT_REGISTRY:
+        raise ValueError(f"Prompt key '{prompt_key}' not found in PROMPT_REGISTRY; expected pattern {{domain}}_{{task}}_{{variant}}")
+
+    response_model = _RESPONSE_MODEL_BY_TASK_DOMAIN.get((task, domain))
+    if response_model is None:
+        raise ValueError(f"No response model registered for task={task}, domain={domain}")
+
+    return prompt_key, response_model
 
 
 def _build_and_optionally_submit(
@@ -224,6 +244,7 @@ def _build_and_optionally_submit(
         if not os.getenv('OPENAI_API_KEY'):
             raise ValueError("OPENAI_API_KEY is not set; please set it in .env file")
         client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+        print(f"Submitting batch with model={args.model}, endpoint={args.endpoint}, prompt_key={prompt_key}")
         created = upload_file_and_create_batch(client, jsonl_path, endpoint=args.endpoint)
         batch_id = created['batch'].id if hasattr(created['batch'], 'id') else created['batch']['id']
         print(f"Created batch: {batch_id}")
@@ -249,11 +270,22 @@ def _post_process_if_needed(base_df: pd.DataFrame, *, args, results_jsonl_path: 
             print("No results JSONL provided or created. Skipping post-processing.")
 
 
-def _filter_domain(df: pd.DataFrame, domain: str, topic_col: str = 'topic') -> pd.DataFrame:
+def _filter_domain(df: pd.DataFrame, domain: str, topic_col: str = TOPIC_COL) -> pd.DataFrame:
+    """Filter by domain if topic column exists; otherwise return df unchanged."""
     if topic_col in df.columns:
         dom = 'monetary' if domain == 'monetary' else 'fiscal'
         return df[df[topic_col].str.contains(dom, case=False, na=False)].copy()
     return df
+
+
+def _with_optional_fields(column_mapping: Dict[str, str], df: pd.DataFrame, *, country_col: str, year_col: str) -> Dict[str, str]:
+    """Add optional COUNTRY/YEAR fields if the columns exist."""
+    mapping = dict(column_mapping)
+    if country_col in df.columns:
+        mapping[COUNTRY_KEY] = country_col
+    if year_col in df.columns:
+        mapping[YEAR_KEY] = year_col
+    return mapping
 
 def _add_common_cli(parser):
     parser.add_argument('--test-mode', action='store_true', default=False)
@@ -267,6 +299,7 @@ def _add_common_cli(parser):
     parser.add_argument('--submit', action='store_true', default=False)
     parser.add_argument('--post-process', action='store_true', default=False)
     parser.add_argument('--results-jsonl', type=str, default=None)
+    parser.add_argument('--prompt-variant', type=str, default='few_shot', help="Prompt key suffix; expects PROMPT_REGISTRY key pattern {domain}_{task}_{variant}")
     return parser
 
 
@@ -292,6 +325,7 @@ def parse_args(argv=None):
     _add_common_cli(p_stance)
     p_stance.add_argument('--domain', type=str, choices=['monetary', 'fiscal'], required=True)
     p_stance.add_argument('--author-col', type=str, default='type', help='Column indicating staff/buff')
+    p_stance.add_argument('--type-col', type=str, default='type', help='Column indicating staff/buff (used for fiscal stance pivot)')
     p_stance.add_argument('--text-col', type=str, default='text')
     p_stance.add_argument('--id-col', type=str, default='Print ISBN')
     p_stance.add_argument('--country-col', type=str, default='country')
@@ -313,7 +347,9 @@ def parse_args(argv=None):
 
 #%%
 def main(argv=None):
-    args = parse_args(argv if argv is not None else [])
+    # Honor real CLI args when called from the shell; fall back to provided argv for programmatic use
+    args = parse_args(sys.argv[1:] if argv is None else argv)
+    #args = parse_args(sys.argv[1:] if argv is None else [])
     results_dir = Path(args.output_dir)
     results_dir.mkdir(parents=True, exist_ok=True)
     df = pd.read_csv(args.data_file)
@@ -323,6 +359,7 @@ def main(argv=None):
         df = df.sample(n=min(args.sample_size, len(df)), random_state=42)
 
     if args.task == 'agreement':
+        print(args)
         df = _filter_domain(df, args.domain, args.topic_col)
 
         id_cols = [c for c in [args.id_col, args.topic_col, args.country_col, args.year_col] if c in df.columns]
@@ -330,11 +367,14 @@ def main(argv=None):
         wide = wide.reset_index(drop=True)
         wide['id'] = wide.index.astype(str)
 
-        prompt_key, response_model = _select_prompt_and_response('agreement', args.domain)
+        prompt_key, response_model = _select_prompt_and_response('agreement', args.domain, args.prompt_variant)
 
-        column_mapping: Dict[str, str] = {'STAFF_TEXT': 'staff', 'AUTHORITY_TEXT': 'buff'}
-        if args.country_col in wide.columns: column_mapping['COUNTRY'] = args.country_col
-        if args.year_col in wide.columns: column_mapping['YEAR'] = args.year_col
+        # Base mapping required by the prompt schema; append optional fields if present
+        column_mapping: Dict[str, str] = {
+            STAFF_TEXT_KEY: STAFF_COL,
+            AUTHORITY_TEXT_KEY: AUTHORITY_COL,
+        }
+        column_mapping = _with_optional_fields(column_mapping, wide, country_col=args.country_col, year_col=args.year_col)
 
         jsonl_path = results_dir / (args.jsonl_file or f"agreement_{args.domain}_batch.jsonl")
         _, results_jsonl_path = _build_and_optionally_submit(
@@ -348,8 +388,9 @@ def main(argv=None):
         _post_process_if_needed(wide, args=args, results_jsonl_path=results_jsonl_path, out_csv_path=results_dir / f"agreement_{args.domain}_results.csv")
 
     elif args.task == 'stance':
+        print(args)
         # Domain filter if column exists
-        df = _filter_domain(df, args.domain, 'topic')
+        df = _filter_domain(df, args.domain, TOPIC_COL)
 
         if args.domain == 'monetary':
             # Per-row classification for a single author (monetary)
@@ -366,12 +407,10 @@ def main(argv=None):
             df_s = df_s.reset_index(drop=True)
             df_s['id'] = df_s.index.astype(str)
 
-            prompt_key, response_model = _select_prompt_and_response('stance', args.domain)
-            column_mapping = {'TEXT_AUTHOR': 'TEXT_AUTHOR', 'TEXT': args.text_col}
-            if args.country_col in df_s.columns:
-                column_mapping['COUNTRY'] = args.country_col
-            if args.year_col in df_s.columns:
-                column_mapping['YEAR'] = args.year_col
+            prompt_key, response_model = _select_prompt_and_response('stance', args.domain, args.prompt_variant)
+            # Mapping aligns with prompt expectations; optional COUNTRY/YEAR added when available
+            column_mapping = {TEXT_AUTHOR_KEY: TEXT_AUTHOR_KEY, 'TEXT': args.text_col}
+            column_mapping = _with_optional_fields(column_mapping, df_s, country_col=args.country_col, year_col=args.year_col)
 
             jsonl_path = results_dir / (args.jsonl_file or f"stance_{args.domain}_batch.jsonl")
             _, results_jsonl_path = _build_and_optionally_submit(
@@ -386,17 +425,21 @@ def main(argv=None):
         else:
             # Fiscal stance requires both staff and authority texts; pivot to wide rows
             id_cols = [c for c in [args.id_col, 'topic' if 'topic' in df.columns else None, args.country_col, args.year_col] if c and c in df.columns]
-            wide = _pivot_agreement_rows(df, id_cols=id_cols, type_col='type', text_col=args.text_col)
+            wide = _pivot_agreement_rows(df, id_cols=id_cols, type_col=args.type_col, text_col=args.text_col)
             # Keep rows with at least one non-empty text
-            for col in ['staff', 'buff']:
+            for col in [STAFF_COL, AUTHORITY_COL]:
                 if col not in wide.columns:
                     wide[col] = None
-            wide = wide[(wide['staff'].notna()) | (wide['buff'].notna())].copy()
+            wide = wide[(wide[STAFF_COL].notna()) | (wide[AUTHORITY_COL].notna())].copy()
             wide = wide.reset_index(drop=True)
             wide['id'] = wide.index.astype(str)
 
-            prompt_key, response_model = _select_prompt_and_response('stance', args.domain)
-            column_mapping = {'STAFF_TEXT': 'staff', 'AUTHORITY_TEXT': 'buff'}
+            prompt_key, response_model = _select_prompt_and_response('stance', args.domain, args.prompt_variant)
+            column_mapping = {
+                STAFF_TEXT_KEY: STAFF_COL,
+                AUTHORITY_TEXT_KEY: AUTHORITY_COL,
+            }
+            column_mapping = _with_optional_fields(column_mapping, wide, country_col=args.country_col, year_col=args.year_col)
 
             jsonl_path = results_dir / (args.jsonl_file or f"stance_{args.domain}_batch.jsonl")
             _, results_jsonl_path = _build_and_optionally_submit(
