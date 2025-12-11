@@ -12,6 +12,10 @@ You are an experienced macroeconomist from IMF. Given a piece of text concerning
 - **Neutral**: Policy maintains current fiscal position without significant expansion or contraction. Balanced approach with no major changes to spending or taxation.
 - **Moderately Expansionary**: Policy leans toward fiscal stimulus but with caution. May involve targeted spending increases or modest tax reductions.
 - **Expansionary**: Policy aims to increase government spending, reduce taxes, or both to stimulate aggregate demand and economic growth. Includes significant fiscal stimulus measures.
+- **Unclear**: Policy discusses fiscal matters but the specific stance cannot be clearly determined from the available information.
+- **Irrelevant**: Text does not discuss fiscal policy or contains no relevant fiscal policy information.
+
+
 
 Definitions also support assessing the direction of change in stance (tightening/tightening bias/no change/loosening bias/loosening). If the text discusses fiscal policy but the specific stance is not clear, assign unclear; if it does not discuss fiscal policy, assign irrelevant.
 

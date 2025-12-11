@@ -17,12 +17,9 @@ import time
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
 
-# Ensure repo root is on sys.path regardless of current working directory.
-# This script lives at: <repo_root>/src/Traction/inference_agreement_stance.py
-_REPO_ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(_REPO_ROOT))
+sys.path.insert(0, str('../../'))
 from dotenv import load_dotenv
-load_dotenv(_REPO_ROOT / '.env')
+load_dotenv('../../.env')
 
 import pandas as pd
 from openai import OpenAI
@@ -395,65 +392,65 @@ def main(argv=None):
         # Domain filter if column exists
         df = _filter_domain(df, args.domain, TOPIC_COL)
 
-        # Stance is a per-text classification for BOTH monetary and fiscal prompts.
-        # (Fiscal prompts also use a single {TEXT} field; they do not require pivoting staff/buff into wide rows.)
-        keep_cols = [
-            c
-            for c in [
-                args.id_col,
-                TOPIC_COL if TOPIC_COL in df.columns else None,
-                args.country_col,
-                args.year_col,
-                args.author_col,
-                args.text_col,
-            ]
-            if c and c in df.columns
-        ]
-        df_s = df[keep_cols].copy()
+        if args.domain == 'monetary':
+            # Per-row classification for a single author (monetary)
+            keep_cols = [c for c in [args.id_col, args.country_col, args.year_col, args.author_col, args.text_col] if c in df.columns]
+            df_s = df[keep_cols].copy()
 
-        def _author_label(x: str) -> str:
-            """Normalize author/type labels for prompt formatting."""
-            x_norm = (x or "").strip().lower()
-            if x_norm == "staff":
-                return "IMF staff"
-            if x_norm in {"buff", "authority", "authorities", "country authority", "country authorities"}:
-                return "country authority"
-            # Fall back to raw value; avoids mislabeling unknown categories.
-            return (x or "").strip() or "unknown"
+            def _author_label(x: str) -> str:
+                x = (x or '').strip().lower()
+                return 'IMF staff' if x == 'staff' else 'country authority'
 
-        if args.author_col in df_s.columns:
-            df_s[TEXT_AUTHOR_KEY] = df_s[args.author_col].apply(_author_label)
+            df_s['TEXT_AUTHOR'] = df_s[args.author_col].apply(_author_label)
+            df_s = df_s[df_s[args.text_col].notna()].copy()
+            df_s[args.text_col] = df_s[args.text_col].astype(str).str.strip()
+            df_s = df_s.reset_index(drop=True)
+            df_s['id'] = df_s.index.astype(str)
 
-        # Basic cleaning
-        df_s = df_s[df_s[args.text_col].notna()].copy()
-        df_s[args.text_col] = df_s[args.text_col].astype(str).str.strip()
-        df_s = df_s.reset_index(drop=True)
-        df_s["id"] = df_s.index.astype(str)
+            prompt_key, response_model = _select_prompt_and_response('stance', args.domain, args.prompt_variant)
+            # Mapping aligns with prompt expectations; optional COUNTRY/YEAR added when available
+            column_mapping = {TEXT_AUTHOR_KEY: TEXT_AUTHOR_KEY, 'TEXT': args.text_col}
+            column_mapping = _with_optional_fields(column_mapping, df_s, country_col=args.country_col, year_col=args.year_col)
 
-        prompt_key, response_model = _select_prompt_and_response("stance", args.domain, args.prompt_variant)
+            jsonl_path = results_dir / (args.jsonl_file or f"stance_{args.domain}_batch.jsonl")
+            _, results_jsonl_path = _build_and_optionally_submit(
+                df_s,
+                prompt_key=prompt_key,
+                response_model=response_model,
+                column_mapping=column_mapping,
+                jsonl_path=jsonl_path,
+                args=args,
+            )
+            _post_process_if_needed(df_s, args=args, results_jsonl_path=results_jsonl_path, out_csv_path=results_dir / f"stance_{args.domain}_results.csv")
+        else:
+            # Fiscal stance requires both staff and authority texts; pivot to wide rows
+            id_cols = [c for c in [args.id_col, 'topic' if 'topic' in df.columns else None, args.country_col, args.year_col] if c and c in df.columns]
+            wide = _pivot_agreement_rows(df, id_cols=id_cols, type_col=args.type_col, text_col=args.text_col)
+            # Keep rows with at least one non-empty text
+            for col in [STAFF_COL, AUTHORITY_COL]:
+                if col not in wide.columns:
+                    wide[col] = None
+            wide = wide[(wide[STAFF_COL].notna()) | (wide[AUTHORITY_COL].notna())].copy()
+            wide = wide.reset_index(drop=True)
+            wide['id'] = wide.index.astype(str)
 
-        # Mapping aligns with prompt expectations; optional COUNTRY/YEAR added when available.
-        # Always provide TEXT -> text column; provide TEXT_AUTHOR only if available/needed by prompt.
-        column_mapping: Dict[str, str] = {"TEXT": args.text_col}
-        if TEXT_AUTHOR_KEY in df_s.columns:
-            column_mapping[TEXT_AUTHOR_KEY] = TEXT_AUTHOR_KEY
-        column_mapping = _with_optional_fields(column_mapping, df_s, country_col=args.country_col, year_col=args.year_col)
+            prompt_key, response_model = _select_prompt_and_response('stance', args.domain, args.prompt_variant)
+            column_mapping = {
+                STAFF_TEXT_KEY: STAFF_COL,
+                AUTHORITY_TEXT_KEY: AUTHORITY_COL,
+            }
+            column_mapping = _with_optional_fields(column_mapping, wide, country_col=args.country_col, year_col=args.year_col)
 
-        jsonl_path = results_dir / (args.jsonl_file or f"stance_{args.domain}_batch.jsonl")
-        _, results_jsonl_path = _build_and_optionally_submit(
-            df_s,
-            prompt_key=prompt_key,
-            response_model=response_model,
-            column_mapping=column_mapping,
-            jsonl_path=jsonl_path,
-            args=args,
-        )
-        _post_process_if_needed(
-            df_s,
-            args=args,
-            results_jsonl_path=results_jsonl_path,
-            out_csv_path=results_dir / f"stance_{args.domain}_results.csv",
-        )
+            jsonl_path = results_dir / (args.jsonl_file or f"stance_{args.domain}_batch.jsonl")
+            _, results_jsonl_path = _build_and_optionally_submit(
+                wide,
+                prompt_key=prompt_key,
+                response_model=response_model,
+                column_mapping=column_mapping,
+                jsonl_path=jsonl_path,
+                args=args,
+            )
+            _post_process_if_needed(wide, args=args, results_jsonl_path=results_jsonl_path, out_csv_path=results_dir / f"stance_{args.domain}_results.csv")
 
     else:
         raise ValueError('Unknown task')

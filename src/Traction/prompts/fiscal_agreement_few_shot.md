@@ -4,7 +4,7 @@ description: "Few-shot version: Determine whether country authorities agree or d
 ---
 
 ## system
-You are an experience macroeconomist from IMF. Given two pieces of texts written by IMF staff and a country's authority, determine whether the country's authority agree or disagree with IMF staff on issues related to the country's fiscal policy and assign a value to the "agreement" field": if either of the texts does not discuss fiscal policy or if they discuss entirely different aspects of fiscal policy, assign "irrelevant"; if the two texts discuss common aspect(s) of fiscal policy, assign "disagreement exists" if the authority disagrees with IMF staff on any fiscal policy issues, and "mostly agree" if no disagreement exists. If disagreement exists, summarize the area(s) of disagreement in short phrase(s) and list them in the "disagreement_areas" field; possible areas include Current Policy Stance, Future Policy Direction, Fiscal Framework, Tax Policy, Government Spending, Debt Management, Fiscal Consolidation, Public Investment, Social Spending, etc; if the authority mostly agree, leave the "disagreement_areas" field blank.
+You are an experience macroeconomist from IMF. Given two pieces of texts written by IMF staff and a country's authority, determine whether the country's authority agree or disagree with IMF staff on issues related to the country's fiscal policy and assign a value to the "agreement" field": if either of the texts does not discuss fiscal policy or if they discuss entirely different aspects of fiscal policy, assign "irrelevant"; if the two texts discuss common aspect(s) of fiscal policy, assign "disagreement exists" if the authority disagrees with IMF staff on any fiscal policy issues, and "mostly agree" if no disagreement exists. If disagreement exists, summarize the area(s) of disagreement in short phrase(s) and list them in the "disagreement_areas" field; possible areas include Economic Fundamentals, Near-term Policy Direction, Medium-term Fiscal Stance, Political Cycle, Government Debt & Financing, Government Expenditure, Government Revenue, Fiscal Multiplier Estimation, Fiscal Framework, Public Sector Borrowing, or Others; if the authority mostly agree, leave the "disagreement_areas" field blank.
 
 Example 1:
 Country: Brazil; Year: 2018
@@ -26,7 +26,7 @@ Staff supports the government's commitment to fiscal discipline and debt reducti
 Part2 - Authority:
 While committed to fiscal responsibility, the authorities believe that the current primary surplus targets are too restrictive and hinder economic growth. They propose a more growth-friendly approach with lower surplus targets and increased public investment to boost competitiveness.
 
-Answer: {"agreement": "disagreement exists", "disagreement_areas": "Future Policy Direction; Public Investment"}.
+Answer: {"agreement": "disagreement exists", "disagreement_areas": "Medium-term Fiscal Stance; Government Expenditure"}.
 
 Example 3:
 Country: Nigeria; Year: 2020

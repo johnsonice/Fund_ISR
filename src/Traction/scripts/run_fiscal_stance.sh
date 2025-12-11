@@ -1,7 +1,7 @@
 cd /data/home/xiong/dev/Fund_ISR/src/Traction/
 PROMPT_VARIANT=${PROMPT_VARIANT:-few_shot}
 
-python inference_agreement_stance.py agreement \
+python inference_agreement_stance.py stance \
   --domain fiscal \
   --prompt-variant "$PROMPT_VARIANT" \
   --submit \
@@ -9,7 +9,7 @@ python inference_agreement_stance.py agreement \
   --model gpt-5-nano 
 
 
-# python inference_agreement_stance.py agreement \
+# python inference_agreement_stance.py stance \
 #   --domain fiscal \
 #   --prompt-variant "$PROMPT_VARIANT" \
 #   --submit \

@@ -14,6 +14,18 @@ from libs.llm_factory_openai import BatchAsyncLLMAgent
 
 
 #%%
+def _safe_placeholder_format(template: str, format_data: Dict[str, str]) -> str:
+    """Safely replace `{PLACEHOLDER}` tokens without interpreting other braces.
+
+    We avoid `str.format(**format_data)` because many prompts contain JSON examples
+    like `{"key": "value"}` which would otherwise be treated as format fields.
+    """
+    out = template
+    for key, value in format_data.items():
+        out = out.replace("{" + key + "}", value)
+    return out
+
+
 def _build_batch_messages_from_df(
     df: pd.DataFrame,
     prompt_template: Dict[str, str],
@@ -143,20 +155,12 @@ def _build_batch_messages_from_df_flexible(
         
         # Format system prompt if it exists and has placeholders
         if "system" in this_template:
-            try:
-                this_template["system"] = this_template["system"].format(**format_data)
-            except KeyError as e:
-                # Some placeholders might only be in user section
-                pass
+            this_template["system"] = _safe_placeholder_format(this_template["system"], format_data)
         
         # Format user prompt (required)
         if "user" not in this_template:
             raise KeyError("Prompt template must contain a 'user' field.")
-        try:
-            this_template["user"] = this_template["user"].format(**format_data)
-        except KeyError as e:
-            # Some placeholders might only be in system section
-            pass
+        this_template["user"] = _safe_placeholder_format(this_template["user"], format_data)
         
         messages = format_messages(this_template, add_schema=True)
         batch_messages.append(messages)
