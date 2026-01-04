@@ -35,13 +35,29 @@ class MonetaryAgreementChainOfThoughtResponse(BaseModel):
 
 # Fiscal Policy Classification Schemas
 class FiscalStanceResponse(BaseModel):
-    stance_current: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary", "unclear", "irrelevant"] = Field(..., description="Current fiscal policy stance")
-    stance_future: Literal["tightening", "tightening bias", "no change", "loosening bias", "loosening", "unclear", "irrelevant"] = Field(..., description="Future fiscal policy direction")
+    # NOTE: Fiscal stance prompts in `prompts/` were updated to only return the near-term
+    # (next-year) direction of change in fiscal policy stance, not a "current stance".
+    stance_near_term: Literal[
+        "tightening",
+        "tightening bias",
+        "no change",
+        "loosening bias",
+        "loosening",
+        "unclear",
+        "irrelevant",
+    ] = Field(..., description="Near-term (next-year) fiscal policy direction")
 
 class FiscalStanceChainOfThoughtResponse(BaseModel):
-    stance_current: Literal["contractionary", "moderately contractionary", "neutral", "moderately expansionary", "expansionary", "unclear", "irrelevant"] = Field(..., description="Current fiscal policy stance")
-    stance_future: Literal["tightening", "tightening bias", "no change", "loosening bias", "loosening", "unclear", "irrelevant"] = Field(..., description="Future fiscal policy direction")
-    reason: str = Field(..., description="Reasoning for the classifications")
+    reason: str = Field(..., description="Reasoning for the classification")
+    stance_near_term: Literal[
+        "tightening",
+        "tightening bias",
+        "no change",
+        "loosening bias",
+        "loosening",
+        "unclear",
+        "irrelevant",
+    ] = Field(..., description="Near-term (next-year) fiscal policy direction")
 
 # Fiscal Agreement Classification Schemas
 class FiscalAgreementResponse(BaseModel):
