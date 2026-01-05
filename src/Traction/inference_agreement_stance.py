@@ -39,21 +39,29 @@ from prompts.schema import (
     MonetaryStanceResponse,
     FiscalStanceResponse,
 )
+from prompts.prompt_examples import (
+    AUTHOR_TYPE_MAPPING,
+    AUTHOR_TYPE_POSSESSIVE_MAPPING,
+    AUTHOR_VERB_MAPPING,
+    TASK_EXAMPLES,
+    TASK_EXPLANATIONS,
+    TASK_COLUMN_MAPPINGS
+)
 from topic_identification_batch import (
     upload_file_and_create_batch,
     wait_for_batch_completion,
     download_batch_results,
 )
 
-# Common column labels used across agreement/stance flows
+# Expected column names in input CSV (matches TASK_COLUMN_MAPPINGS)
 STAFF_COL = 'staff'
 AUTHORITY_COL = 'buff'
 TOPIC_COL = 'topic'
-COUNTRY_KEY = 'COUNTRY'
-YEAR_KEY = 'YEAR'
-STAFF_TEXT_KEY = 'STAFF_TEXT'
-AUTHORITY_TEXT_KEY = 'AUTHORITY_TEXT'
-TEXT_AUTHOR_KEY = 'TEXT_AUTHOR'
+TYPE_COL = 'type'  # Column indicating staff/buff
+TEXT_COL = 'text'
+COUNTRY_COL = 'country'
+YEAR_COL = 'year'
+ID_COL = 'Print ISBN'
 
 
 #%%
@@ -281,15 +289,6 @@ def _filter_domain(df: pd.DataFrame, domain: str, topic_col: str = TOPIC_COL) ->
     return df
 
 
-def _with_optional_fields(column_mapping: Dict[str, str], df: pd.DataFrame, *, country_col: str, year_col: str) -> Dict[str, str]:
-    """Add optional COUNTRY/YEAR fields if the columns exist."""
-    mapping = dict(column_mapping)
-    if country_col in df.columns:
-        mapping[COUNTRY_KEY] = country_col
-    if year_col in df.columns:
-        mapping[YEAR_KEY] = year_col
-    return mapping
-
 def _add_common_cli(parser):
     parser.add_argument('--test-mode', action='store_true', default=False)
     parser.add_argument('--sample-size', type=int, default=1000)
@@ -315,25 +314,13 @@ def parse_args(argv=None):
     p_agree = sub.add_parser('agreement', help='Infer agreement between staff and authority')
     _add_common_cli(p_agree)
     p_agree.add_argument('--domain', type=str, choices=['monetary', 'fiscal'], required=False, default='monetary')
-    p_agree.add_argument('--topic-col', type=str, default='topic')
-    p_agree.add_argument('--type-col', type=str, default='type')
-    p_agree.add_argument('--text-col', type=str, default='text')
-    p_agree.add_argument('--id-col', type=str, default='Print ISBN')
-    p_agree.add_argument('--country-col', type=str, default='country', help='Optional if present')
-    p_agree.add_argument('--year-col', type=str, default='year', help='Optional if present')
     p_agree.add_argument('--max-input-length', type=int, default=8000)
 
     # Stance task
     p_stance = sub.add_parser('stance', help='Infer stance for each row')
     _add_common_cli(p_stance)
-    p_stance.add_argument('--domain', type=str, choices=['monetary', 'fiscal'], required=True)
-    p_stance.add_argument('--author-col', type=str, default='type', help='Column indicating staff/buff')
-    p_stance.add_argument('--type-col', type=str, default='type', help='Column indicating staff/buff (used for fiscal stance pivot)')
-    p_stance.add_argument('--text-col', type=str, default='text')
-    p_stance.add_argument('--id-col', type=str, default='Print ISBN')
-    p_stance.add_argument('--country-col', type=str, default='country')
-    p_stance.add_argument('--year-col', type=str, default='year')
-    p_stance.add_argument('--max-input-length', type=int, default=4000)
+    p_stance.add_argument('--domain', type=str, choices=['monetary', 'fiscal'], required=False,default='monetary')
+    p_stance.add_argument('--max-input-length', type=int, default=8000)
 
     # Default to agreement task in interactive/no-args mode and when subcommand omitted
     parser.set_defaults(task='agreement')
@@ -358,26 +345,23 @@ def main(argv=None):
     df = pd.read_csv(args.data_file)
     if args.test_mode:
         # keep only non-null text and sample
-        df = df[df[args.text_col].notna()].copy() if 'text_col' in args.__dict__ else df
+        if TEXT_COL in df.columns:
+            df = df[df[TEXT_COL].notna()].copy()
         df = df.sample(n=min(args.sample_size, len(df)), random_state=42)
 
     if args.task == 'agreement':
         print(args)
-        df = _filter_domain(df, args.domain, args.topic_col)
+        df = _filter_domain(df, args.domain, TOPIC_COL)
 
-        id_cols = [c for c in [args.id_col, args.topic_col, args.country_col, args.year_col] if c in df.columns]
-        wide = _pivot_agreement_rows(df, id_cols=id_cols, type_col=args.type_col, text_col=args.text_col)
+        id_cols = [c for c in [ID_COL, TOPIC_COL, COUNTRY_COL, YEAR_COL] if c in df.columns]
+        wide = _pivot_agreement_rows(df, id_cols=id_cols, type_col=TYPE_COL, text_col=TEXT_COL)
         wide = wide.reset_index(drop=True)
         wide['id'] = wide.index.astype(str)
 
         prompt_key, response_model = _select_prompt_and_response('agreement', args.domain, args.prompt_variant)
 
-        # Base mapping required by the prompt schema; append optional fields if present
-        column_mapping: Dict[str, str] = {
-            STAFF_TEXT_KEY: STAFF_COL,
-            AUTHORITY_TEXT_KEY: AUTHORITY_COL,
-        }
-        column_mapping = _with_optional_fields(column_mapping, wide, country_col=args.country_col, year_col=args.year_col)
+        # Use centralized column mapping from prompt_examples
+        column_mapping = TASK_COLUMN_MAPPINGS['agreement'].copy()
 
         jsonl_path = results_dir / (args.jsonl_file or f"agreement_{args.domain}_batch.jsonl")
         _, results_jsonl_path = _build_and_optionally_submit(
@@ -400,44 +384,44 @@ def main(argv=None):
         keep_cols = [
             c
             for c in [
-                args.id_col,
+                ID_COL,
                 TOPIC_COL if TOPIC_COL in df.columns else None,
-                args.country_col,
-                args.year_col,
-                args.author_col,
-                args.text_col,
+                COUNTRY_COL,
+                YEAR_COL,
+                TYPE_COL,
+                TEXT_COL,
             ]
             if c and c in df.columns
         ]
         df_s = df[keep_cols].copy()
+        # Normalize author column
+        if TYPE_COL in df_s.columns:
+            df_s[TYPE_COL] = df_s[TYPE_COL].astype(str).str.strip().str.lower()
 
-        def _author_label(x: str) -> str:
-            """Normalize author/type labels for prompt formatting."""
-            x_norm = (x or "").strip().lower()
-            if x_norm == "staff":
-                return "IMF staff"
-            if x_norm in {"buff", "authority", "authorities", "country authority", "country authorities"}:
-                return "country authority"
-            # Fall back to raw value; avoids mislabeling unknown categories.
-            return (x or "").strip() or "unknown"
+        # Get task-specific examples and explanations from centralized constants
+        task_type = f"{args.domain}_stance"
+        example_dict = TASK_EXAMPLES.get(task_type, {})
+        explanation_dict = TASK_EXPLANATIONS.get(task_type, {})
 
-        if args.author_col in df_s.columns:
-            df_s[TEXT_AUTHOR_KEY] = df_s[args.author_col].apply(_author_label)
+        # Populate prompt-format fields using centralized mappings
+        type_series = df_s[TYPE_COL] if TYPE_COL in df_s.columns else pd.Series([""] * len(df_s))
+        df_s['author_type'] = type_series.map(AUTHOR_TYPE_MAPPING).fillna(type_series.astype(str))
+        df_s['type_possessive'] = type_series.map(AUTHOR_TYPE_POSSESSIVE_MAPPING).fillna(type_series.astype(str))
+        df_s['verb'] = type_series.map(AUTHOR_VERB_MAPPING).fillna('stated')
+        df_s['examples'] = type_series.map(example_dict).fillna('')
+        df_s['explanation'] = type_series.map(explanation_dict).fillna('')
+
 
         # Basic cleaning
-        df_s = df_s[df_s[args.text_col].notna()].copy()
-        df_s[args.text_col] = df_s[args.text_col].astype(str).str.strip()
+        df_s = df_s[df_s[TEXT_COL].notna()].copy()
+        df_s[TEXT_COL] = df_s[TEXT_COL].astype(str).str.strip()
         df_s = df_s.reset_index(drop=True)
         df_s["id"] = df_s.index.astype(str)
 
         prompt_key, response_model = _select_prompt_and_response("stance", args.domain, args.prompt_variant)
 
-        # Mapping aligns with prompt expectations; optional COUNTRY/YEAR added when available.
-        # Always provide TEXT -> text column; provide TEXT_AUTHOR only if available/needed by prompt.
-        column_mapping: Dict[str, str] = {"TEXT": args.text_col}
-        if TEXT_AUTHOR_KEY in df_s.columns:
-            column_mapping[TEXT_AUTHOR_KEY] = TEXT_AUTHOR_KEY
-        column_mapping = _with_optional_fields(column_mapping, df_s, country_col=args.country_col, year_col=args.year_col)
+        # Use centralized column mapping from prompt_examples
+        column_mapping = TASK_COLUMN_MAPPINGS['stance'].copy()
 
         jsonl_path = results_dir / (args.jsonl_file or f"stance_{args.domain}_batch.jsonl")
         _, results_jsonl_path = _build_and_optionally_submit(

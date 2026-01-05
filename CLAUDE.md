@@ -4,6 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What's New (Latest Updates)
 
+**Recent Changes (Jan 2026):**
+- Updated fiscal domain processing in `inference_agreement_stance.py` (Jan 4, 2026)
+- Enhanced visualization charts and post-estimation analysis (Dec 11, 2025)
+- Optimized stance prediction pipeline with improved message formatting (Dec 11, 2025)
+- Added comprehensive evaluation results comparing GPT-5/5-mini/5-nano models
+
 **Major additions to the repository:**
 
 1. **Production Stance & Agreement Inference** (`src/Traction/inference_agreement_stance.py`)
@@ -187,7 +193,8 @@ plot_group_lines_by_year(proportions, groups=['ALL', 'AE', 'EM', 'LIC'])
 - **Evaluation Pipeline**: `notebooks/Traction/evaluate_fiscal_monetray_pipeline.ipynb`
   - Function: `evaluate_prompt_and_model(prompt_key, model_name, data_dir, use_full_dataset=True)`
   - Supports monetary/fiscal stance and agreement tasks
-  - Results in `notebooks/Traction/evaluation_results.md`
+  - Comprehensive evaluation results in `src/Traction/evaluation_results.md`
+  - Quick evaluation summary in `src/Traction/temp/temp_eval.md`
 - **Inference Demos**:
   - `llm_fiscal_monetary_inference_demo.ipynb`: End-to-end inference examples
   - `llm_fiscal_monetary_eval_demo.ipynb`: Evaluation workflow demonstrations
@@ -227,6 +234,10 @@ plot_group_lines_by_year(proportions, groups=['ALL', 'AE', 'EM', 'LIC'])
     - `post_estimate_analysis/data_vis.ipynb`: Interactive analysis notebook
   - **Fine-tuning pipeline:**
     - `train_eval/`: Fine-tuning pipeline for GPT-5-mini stance classification (see Fine-Tuning section)
+  - **Legacy & reference code:**
+    - `reference_code/`: Legacy scripts from earlier pipeline iterations (1-13 numbered scripts)
+    - `temp/`: Temporary scripts and evaluation summaries
+    - `scripts/`: Shell scripts for batch execution
 
 - **`src/Others/`**: Experimental scripts and one-off analyses
   - `async_inference.py`: Async inference with vLLM server
@@ -470,17 +481,19 @@ The repository implements a complete pipeline from raw XML to publication-ready 
 
 **Recommended Approach: Use GPT-5-mini as default (GPT-5 series, August 2025)**
 
-Based on evaluation results with previous generation models (`notebooks/Traction/evaluation_results.md`):
+Based on comprehensive evaluation results (`src/Traction/evaluation_results.md`):
 
-**Agreement Classification:**
-- **GPT-5-mini** + Few Shot: ~72-75% accuracy (recommended, cost-effective)
-- **GPT-5** + Few Shot: ~75-78% accuracy (premium upgrade, +3-5%)
-- **GPT-5-nano** + Few Shot: ~66-70% accuracy (budget option)
+**Agreement Classification (Monetary):**
+- **GPT-5** + Few Shot: **74.74%** accuracy (best overall, F1: 0.7327)
+- **GPT-5-mini** + Few Shot: **71.97%** accuracy (recommended cost-effective, F1: 0.6944)
+- **GPT-5-nano** + Few Shot: **66.44%** accuracy (budget option, F1: 0.6395)
+- Performance gap: ~3% between GPT-5 and GPT-5-mini
 
-**Stance Classification:**
-- **GPT-5-mini** + Few Shot: ~65-70% accuracy (recommended baseline)
-- **GPT-5** + Few Shot: ~74-78% accuracy (premium upgrade, +8-10%)
-- **Fine-tuned GPT-5-mini**: Target >75% accuracy (see Fine-Tuning section below)
+**Stance Classification (Monetary):**
+- **GPT-5** + Few Shot: **74.05%** average accuracy (78.55% current, 69.55% future)
+- **GPT-5-mini** + Few Shot: **65.40%** average accuracy (67.47% current, 63.32% future)
+- **Fine-tuned GPT-4.1-mini**: **78-83%** accuracy (see Fine-Tuning section below)
+- Performance gap: ~8.6% between GPT-5 and GPT-5-mini (larger than agreement task)
 
 **Model IDs (August 2025 release):**
 - `gpt-5-mini-2025-08-07` - Recommended default for most tasks
@@ -488,11 +501,13 @@ Based on evaluation results with previous generation models (`notebooks/Traction
 - `gpt-5-nano-2025-08-07` - Most cost-effective option
 
 **Key Findings:**
-- **Default recommendation**: Use `gpt-5-mini` with few_shot prompts for cost-effective performance
-- Always use few_shot prompts (consistently best across all tasks)
-- Upgrade to `gpt-5` only when higher accuracy is critical and budget allows
-- Avoid "with_definitions" prompts (consistently worst)
-- **For production stance classification**: Consider fine-tuning `gpt-5-mini` (see `src/Traction/train_eval/`)
+- **Default recommendation**: Use `gpt-5-mini` with `few_shot` prompts for cost-effective performance
+- **Always use Few Shot prompts** - consistently best across ALL models and tasks (2-8% better than other variants)
+- **Upgrade to GPT-5 for stance tasks** - larger performance gain (8.6%) vs agreement tasks (3%)
+- **Avoid "With Definitions" prompts** - consistently worst performer (3-8% accuracy drop)
+- **Fine-tuning delivers significant gains**: Fine-tuned GPT-4.1-mini achieves 78-83% stance accuracy (vs 65% base GPT-5-mini)
+- **Temporal difficulty**: Current stance prediction is 4-9% easier than future stance across all models
+- **For production stance classification**: Fine-tuning recommended (see `src/Traction/train_eval/`)
 
 ## Fine-Tuning Pipeline
 
@@ -530,8 +545,11 @@ python run_pipeline.py
 
 ### Expected Performance
 
-- **Baseline (gpt-5-mini + few_shot)**: ~65-70% stance accuracy
-- **Fine-tuned gpt-5-mini target**: >75% stance accuracy
+- **Baseline (GPT-5-mini + few_shot)**: 65.40% stance accuracy (monetary)
+- **Fine-tuned GPT-4.1-mini achieved**:
+  - **Current stance**: 82.76% accuracy (combined), 78.45% (standard)
+  - **Future stance**: 77.59% accuracy (combined), 73.28% (standard)
+  - **Performance gain**: +13-17% absolute improvement over baseline
 - **Training time**: 10-40 minutes
 - **Cost**: ~$0.50-2.00 per fine-tuning run (pricing subject to change)
 
@@ -560,6 +578,14 @@ After running the pipeline:
 - `metrics.json`: Raw metrics in JSON format
 
 See `src/Traction/train_eval/README.md` for complete documentation.
+
+### Quick Evaluation Summary
+
+For a quick comparison of GPT-4o models with different prompt strategies, see:
+- `src/Traction/temp/temp_eval.md` - Clean formatted tables showing Agreement and Stance evaluation results
+  - **Agreement**: GPT-4o Chain of Thought performs best (Accuracy: 0.70, F1: 0.6520)
+  - **Stance (Raw)**: GPT-4o Chain of Thought performs best (Accuracy: 0.6567, F1: 0.6565)
+  - **Stance (Merging Unclear/Irrelevant)**: GPT-4o Simple performs best (Accuracy: 0.7783, F1: 0.7610)
 
 ## Quick Reference: Common Workflows
 
