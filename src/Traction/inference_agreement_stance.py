@@ -191,14 +191,6 @@ def _post_process_results_jsonl(results_jsonl_path: Path) -> List[Dict[str, Any]
     return merged
 #%%
 
-_RESPONSE_MODEL_BY_TASK_DOMAIN: Dict[Tuple[str, str], Type[BaseModel]] = {
-    ('agreement', 'monetary'): MonetaryAgreementResponse,
-    ('agreement', 'fiscal'): FiscalAgreementResponse,
-    ('stance', 'monetary'): MonetaryStanceResponse,
-    ('stance', 'fiscal'): FiscalStanceResponse,
-}
-
-
 def _select_prompt_and_response(task: str, domain: str, prompt_variant: str = 'few_shot') -> Tuple[str, Type[BaseModel]]:
     """Return (prompt_key, response_model) based on task, domain, and prompt variant."""
     if task not in ('agreement', 'stance'):
@@ -207,13 +199,15 @@ def _select_prompt_and_response(task: str, domain: str, prompt_variant: str = 'f
         raise ValueError(f"Unknown domain: {domain}")
 
     prompt_key = f"{domain}_{task}_{prompt_variant}"
-    # Fail fast if the prompt variant is not registered; avoids silent fallback at runtime
-    if prompt_key not in PROMPT_REGISTRY:
-        raise ValueError(f"Prompt key '{prompt_key}' not found in PROMPT_REGISTRY; expected pattern {{domain}}_{{task}}_{{variant}}")
 
-    response_model = _RESPONSE_MODEL_BY_TASK_DOMAIN.get((task, domain))
+    # Look up the prompt in PROMPT_REGISTRY (already imported from schema.py)
+    if prompt_key not in PROMPT_REGISTRY:
+        raise ValueError(f"Prompt key '{prompt_key}' not found in PROMPT_REGISTRY")
+
+    # Get the response model from the registry
+    response_model = PROMPT_REGISTRY[prompt_key].get('response_model')
     if response_model is None:
-        raise ValueError(f"No response model registered for task={task}, domain={domain}")
+        raise ValueError(f"No response model found for prompt key '{prompt_key}'")
 
     return prompt_key, response_model
 
@@ -259,7 +253,7 @@ def _build_and_optionally_submit(
         created = upload_file_and_create_batch(client, jsonl_path, endpoint=args.endpoint)
         batch_id = created['batch'].id if hasattr(created['batch'], 'id') else created['batch']['id']
         print(f"Created batch: {batch_id}")
-        final_batch = wait_for_batch_completion(client, batch_id, poll_seconds=5)
+        final_batch = wait_for_batch_completion(client, batch_id, poll_seconds=30)
         ts = int(time.time())
         results_jsonl_path = jsonl_path.parent / f"batch_results_{batch_id}_{ts}.jsonl"
         download_batch_results(client, final_batch, results_jsonl_path)
@@ -319,7 +313,7 @@ def parse_args(argv=None):
     # Stance task
     p_stance = sub.add_parser('stance', help='Infer stance for each row')
     _add_common_cli(p_stance)
-    p_stance.add_argument('--domain', type=str, choices=['monetary', 'fiscal'], required=False,default='monetary')
+    p_stance.add_argument('--domain', type=str, choices=['monetary', 'fiscal'], required=True,default='monetary')
     p_stance.add_argument('--max-input-length', type=int, default=8000)
 
     # Default to agreement task in interactive/no-args mode and when subcommand omitted

@@ -4,14 +4,24 @@ description: "Chain of thought version: Determine whether country authorities ag
 ---
 
 ## system
-You are an experience macroeconomist from IMF. Given two pieces of texts written by IMF staff and a country's authority, determine whether the country's authority agree or disagree with IMF staff on issues related to the country's monetary policy and assign a value to the "agreement" field": if either of the texts does not discuss monetary policy or if they discuss entirely different aspects of monetary policy, assign "irrelevant"; if the two texts discuss common aspect(s) of monetary policy, assign "disagreement exists" if the authority disagrees with IMF staff on any monetary policy issues, and "mostly agree" if no disagreement exists. If disagreement exists, summarize the area(s) of disagreement in short phrase(s) and list them in the "disagreement_areas" field; possible areas include Current Policy Stance, Future Policy Direction, Monetary Policy Framework, Monetary Policy Operations, Central Bank Communication, Institutions, Policy Assessment, Economic Assessment, etc; if the authority mostly agree, leave the "disagreement_areas" field blank. Provide reasoning for your answer.
+You are an experienced macroeconomist from IMF. Given two pieces of texts expressing the views of IMF staff and a country's authorities, respectively, your task is to determine whether the authorities agree or disagree with IMF staff on issues related to the country's monetary policy. 
+
+First, assign a value to the "agreement" field": "mostly agree"/"disagreement exists"/"irrelevant". Note that the authorities' agreement with IMF staff's views is different in concept from IMF staff's agreement with the authorities' views. If the two pieces of texts discuss common aspect(s) of monetary policy or if the authorities directly express agreement/disagreement to monetary related issues in either text: 
+(a) if the authorities disagree with IMF staff on any monetary policy issues, assign "disagreement exists"; 
+(b) if there is no disagreement by the authorities, assign "mostly agree"; 
+(c) if the authorities do not directly express agreement/disagreement with IMF staff on monetary related issues, and either of the texts does not discuss monetary policy or they discuss entirely different aspects of monetary policy, assign "irrelevant".  
+
+Second, if disagreement exists, summarize the area(s) of disagreement in short phrase(s) and list them in the "disagreement_areas" field; for example, "current policy stance", "future policy direction", "monetary policy framework", "monetary policy operations", "central bank communication", "institutions", "economic assessment", etc; if the authorities do not disagree with staff, leave the "disagreement_areas" field blank. 
+
+Provide reasoning before giving your answer. 
 
 ## schema
 Respond **only** in JSON with following keys:
 ```json
-{"agreement": "<irrelevant|disagreement exists|mostly agree>", 
-"disagreement_areas": "<list of disagreement areas or empty string>",
-"reason": "<reasoning for the classification>"}
+{"reason": "<reasoning for the classification>",
+"agreement": "<irrelevant|disagreement exists|mostly agree>", 
+"disagreement_areas": "<list of disagreement areas or empty string>"
+}
 ```
 
 ## user

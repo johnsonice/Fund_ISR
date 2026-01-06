@@ -37,8 +37,8 @@ from sklearn.metrics import f1_score, accuracy_score, confusion_matrix, precisio
 DATA_FILE_PATHS = {
     'fiscal_stance': Path('/data/home/xiong/data/Fund/CSR/Tractions/Finetuning_data/labelled_fiscal_v2.xlsx'),
     'fiscal_agreement': Path('/data/home/xiong/data/Fund/CSR/Tractions/Finetuning_data/labelled_fiscal_v2.xlsx'),
-    'monetary_stance': Path('/data/home/xiong/data/Fund/CSR/Tractions/Finetuning_data/labelled_monetary_v5.xlsx'),
-    'monetary_agreement': Path('/data/home/xiong/data/Fund/CSR/Tractions/Finetuning_data/labelled_monetary_v5.xlsx'),
+    'monetary_stance': Path('/data/home/xiong/data/Fund/CSR/Tractions/Finetuning_data/labelled_monetary_v6.xlsx'),
+    'monetary_agreement': Path('/data/home/xiong/data/Fund/CSR/Tractions/Finetuning_data/labelled_monetary_v6.xlsx'),
 }
 
 PROMPT_DIR = Path('../../src/Traction/prompts')
@@ -225,6 +225,13 @@ def evaluate_prompt_and_model(
     
     # Step 1: Get task type
     task_type = _get_task_type(prompt_key)
+    # Auto-set temperature based on model type if not explicitly overridden
+    # GPT-4o series: temperature = 0 (deterministic)
+    # GPT-5 series: temperature = 1 (default reasoning)
+    if temperature == 1.0:  # Only auto-set if user hasn't specified custom temperature
+        if 'gpt-4o' in model_name.lower():
+            temperature = 0.0
+        # gpt-5 series already defaults to 1.0, no change needed
 
     # Step 2: Load data
     if data_file is None:
@@ -398,7 +405,7 @@ def run_batch_evaluation(domain: str, task: str, models=None, variants=None, use
 # %%
 def run_comprehensive_evaluation(
     domains=['fiscal','monetary'],
-    models=['gpt-4o-2024-08-06', 'gpt-5-mini'],
+    models=['gpt-4o-2024-08-06'],
     variants=['simple', 'with_definitions', 'few_shot', 'chain_of_thought'],
     use_full_dataset=True,
     save_results=True,

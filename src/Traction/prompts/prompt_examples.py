@@ -60,16 +60,20 @@ FISCAL_STANCE_EXPLANATIONS = {
 
 MONETARY_STANCE_EXAMPLES = {
     'staff': (
-        'Example 1: Country: Guyana; Year: 2017; Text: "The accommodative monetary policy is appropriate, but should gradually move towards a neutral stance in 2017." '
+        'Example 1: Country: Guyana; Year: 2017; Text: "The accommodative monetary policy is appropriate, but should gradually move towards a neutral stance in 2017. Pass-through from the exchange rate and from the VAT reform to inflation should be closely monitored."'
         'Answer: {"stance_current": "accommodative", "stance_future": "tightening"}.\n'
-        'Example 2: Country: Mauritius; Year: 2015; Text: "The monetary policy stance is broadly appropriate given the low-inflation environment." '
-        'Answer: {"stance_current": "unclear", "stance_future": "no change"}.'
+        'Example 2: Country: Mauritius; Year: 2015; Text: "The monetary policy stance is broadly appropriate given the low-inflation environment. Further excess liquidity absorption should proceed at a measured pace in order to avoid any sharp increases in market interest rates." '
+        'Answer: {"stance_current": "unclear", "stance_future": "no change"}.\n'
+        'Example 3: Country: Trinidad and Tobago; Year: 2017; Text: "The current monetary policy is appropriate, and in any case, room for maneuver is limited. Modest interest rate easing could eventually support a recovery, but would be contingent on reestablishing policy credibility with a strong fiscal package, wide-ranging structural reforms, and restoring balance in the f/x market.\" '
+        'Answer: {"stance_current": "unclear", "stance_future": "loosening bias"}.\n' 
     ),
     'buff': (
-        'Example 1: Country: Mauritius; Year: 2015; Text: "The monetary policy pursued by Bank of Mauritius will remain cautiously accommodative to subdue inflation." '
-        'Answer: {"stance_current": "accommodative", "stance_future": "no change"}.\n'
-        'Example 2: Country: Guyana; Year: 2017; Text: "The authorities note staff\\\'s recommendation to gradually tighten monetary policy in 2017. However, ... the BoG will continue to closely monitor ... before adjusting its policy stance." '
-        'Answer: {"stance_current": "accommodative", "stance_future": "tightening bias"}.'
+        'Example 1: Country: Guyana; Year: 2019; Text: \"Monetary policy remained broadly accommodative in 2018. The Bank of Guyana (BoG) maintained a bank rate of 5 percent, whilst ensuring an adequate level of liquidity in the banking system to create an enabling environment for credit and economic growth.\"'
+        'Answer: {"stance_current": "accommodative", "stance_future": "no change"}\n'
+        'Example 2: Country: Bangladesh; Year: 2018; Text: \"The monetary policy stance will remain prudent, and the authorities are vigilant against upside risks to inflation and ready for appropriate adjustments in both policy rates and reserve requirements.\"'
+        'Answer: {"stance_current": "unclear", "stance_future": "tightening bias"}.\n'
+        ' Example 3: Country: Iran; Year: 2015; Text: \"Monetary policy is guided by the disinflation strategy which seeks to achieve single-digit inflation by end 2016/17. While prioritizing price stability over output growth, my authorities are of the view that some temporary relief to the economy is needed at present, given sluggish growth, better-than-expected inflation outturns, benign inflation outlook, and tight fiscal stance.\"'
+        'Answer: {"stance_current": "restrictive", "stance_future": "loosening"}.\n'
     ),
 }
 

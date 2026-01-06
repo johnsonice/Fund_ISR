@@ -5,6 +5,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## What's New (Latest Updates)
 
 **Recent Changes (Jan 2026):**
+- **NEW**: Comprehensive replication evaluation results added to `evaluation_results_replication.md` (Jan 5, 2026)
+  - Detailed performance comparison across monetary and fiscal domains
+  - Multiple prompt strategies evaluated (Simple Short/Long, With Definition, Chain of Thought, Few-shot)
+  - Best performers clearly highlighted for each evaluation category
 - Updated fiscal domain processing in `inference_agreement_stance.py` (Jan 4, 2026)
 - Enhanced visualization charts and post-estimation analysis (Dec 11, 2025)
 - Optimized stance prediction pipeline with improved message formatting (Dec 11, 2025)
@@ -193,6 +197,7 @@ plot_group_lines_by_year(proportions, groups=['ALL', 'AE', 'EM', 'LIC'])
 - **Evaluation Pipeline**: `notebooks/Traction/evaluate_fiscal_monetray_pipeline.ipynb`
   - Function: `evaluate_prompt_and_model(prompt_key, model_name, data_dir, use_full_dataset=True)`
   - Supports monetary/fiscal stance and agreement tasks
+  - **Latest results**: `src/Traction/evaluation_results_replication.md` - Comprehensive replication study with highlighted best performers
   - Comprehensive evaluation results in `src/Traction/evaluation_results.md`
   - Quick evaluation summary in `src/Traction/temp/temp_eval.md`
 - **Inference Demos**:
@@ -581,11 +586,31 @@ See `src/Traction/train_eval/README.md` for complete documentation.
 
 ### Quick Evaluation Summary
 
-For a quick comparison of GPT-4o models with different prompt strategies, see:
-- `src/Traction/temp/temp_eval.md` - Clean formatted tables showing Agreement and Stance evaluation results
-  - **Agreement**: GPT-4o Chain of Thought performs best (Accuracy: 0.70, F1: 0.6520)
-  - **Stance (Raw)**: GPT-4o Chain of Thought performs best (Accuracy: 0.6567, F1: 0.6565)
-  - **Stance (Merging Unclear/Irrelevant)**: GPT-4o Simple performs best (Accuracy: 0.7783, F1: 0.7610)
+**Latest Replication Results** (`src/Traction/evaluation_results_replication.md`):
+
+**Monetary Domain:**
+- **Agreement**: GPT-4o + Simple Short performs best (Accuracy: **0.7370**, F1: **0.7132**)
+- **Stance (Raw Results)**:
+  - Current: GPT-4o + Few-shot (Accuracy: **0.6419**, F1: **0.6309**)
+  - Future: GPT-4o + Simple (Accuracy: **0.6678**, F1: **0.6547**)
+- **Stance (Merging Unclear/Irrelevant)**:
+  - Current: GPT-4o + Few-shot (Accuracy: **0.7007**, F1: **0.7165**)
+  - Future: GPT-4o + Simple (Accuracy: **0.7042**, F1: **0.6998**)
+
+**Fiscal Domain:**
+- **Agreement**: GPT-4o + Chain of Thought performs best (Accuracy: **0.7000**, F1: **0.6520**)
+- **Stance (Raw Results)**: GPT-4o + Chain of Thought performs best (Accuracy: **0.6567**, F1: **0.6565**)
+- **Stance (Merging Unclear/Irrelevant)**: GPT-4o + Simple performs best (Accuracy: **0.7783**, F1: **0.7610**)
+
+**Key Insights:**
+- GPT-4o consistently outperforms GPT-4o-mini and GPT-3.5-turbo across all tasks
+- Optimal prompt strategy varies by domain and task
+- Monetary agreement: Simple Short prompts work best
+- Fiscal tasks: Chain of Thought (agreement/stance raw) or Simple (stance merged) work best
+- Merging unclear/irrelevant labels significantly improves stance accuracy (5-10% boost)
+
+For original evaluation results, see:
+- `src/Traction/temp/temp_eval.md` - Earlier GPT-4o evaluation with different prompt strategies
 
 ## Quick Reference: Common Workflows
 
