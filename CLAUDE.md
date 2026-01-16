@@ -2,48 +2,12 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## What's New (Latest Updates)
+## Project Status
 
-**Recent Changes (Jan 2026):**
-- **NEW**: Comprehensive replication evaluation results added to `evaluation_results_replication.md` (Jan 5, 2026)
-  - Detailed performance comparison across monetary and fiscal domains
-  - Multiple prompt strategies evaluated (Simple Short/Long, With Definition, Chain of Thought, Few-shot)
-  - Best performers clearly highlighted for each evaluation category
-- Updated fiscal domain processing in `inference_agreement_stance.py` (Jan 4, 2026)
-- Enhanced visualization charts and post-estimation analysis (Dec 11, 2025)
-- Optimized stance prediction pipeline with improved message formatting (Dec 11, 2025)
-- Added comprehensive evaluation results comparing GPT-5/5-mini/5-nano models
-
-**Major additions to the repository:**
-
-1. **Production Stance & Agreement Inference** (`src/Traction/inference_agreement_stance.py`)
-   - Unified CLI for monetary/fiscal stance and agreement classification
-   - OpenAI Batch API integration for cost-effective large-scale processing
-   - Supports 4 prompt variants (simple, with_definitions, few_shot, chain_of_thought)
-   - Three-step workflow: JSONL generation → batch submission → result post-processing
-
-2. **Post-Estimation Analysis Toolkit** (`src/Traction/post_estimate_analysis/`)
-   - `data_vis_utils.py`: Production-ready visualization utilities
-   - `data_vis.ipynb`: Comprehensive analysis notebook
-   - Income group classification (AE/EM/LC)
-   - Agreement trend analysis with disagreement area extraction
-   - IMF vs authority stance comparison charts
-
-3. **Enhanced LLM Processing Utilities** (`src/Traction/llm_batch_process_utils.py`)
-   - Flexible message building for multi-column DataFrame inputs
-   - Safe placeholder formatting (avoids conflicts with JSON in prompts)
-   - Supports both simple (single text) and complex (multi-field) prompt templates
-
-4. **Expanded Schema & Prompt Library** (`src/Traction/prompts/`)
-   - 17+ prompt templates for stance/agreement tasks
-   - Complete Pydantic schema coverage for all tasks
-   - PROMPT_REGISTRY for centralized prompt management
-
-**Key improvements:**
-- Complete end-to-end pipeline: XML → inference → visualization
-- Modular CLI design with subcommand pattern
-- Sector-agnostic analysis utilities (reusable across monetary/fiscal)
-- Comprehensive evaluation notebooks and demos
+**To Do:**
+- [ ] Experiment fine-tuned pipeline with the formalized prompts for both monetary and fiscal domains
+- [ ] Extend data range to current (2025-2026 Article IV reports)
+- [ ] Explore training strategies beyond SFT (e.g., RFT, RLHF)
 
 ## Environment Setup
 
