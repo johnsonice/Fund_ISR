@@ -1,16 +1,22 @@
 #%%
 import sys
+from pathlib import Path
 from typing import List, Dict, Any, Tuple, Callable, Type
 import nest_asyncio
 from pydantic import BaseModel
 
-sys.path.insert(0, str('../../'))
+# Compute repository root from this file's location
+# File is: <repo_root>/src/Traction/llm_batch_process_utils.py
+# repo_root is 2 parents up
+_REPO_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(_REPO_ROOT / 'libs'))
+
 import warnings
 warnings.filterwarnings("ignore")
 nest_asyncio.apply()
 import pandas as pd  # keep original usage
-from libs.prompt_utils import load_prompt, format_messages
-from libs.llm_factory_openai import BatchAsyncLLMAgent  
+from prompt_utils import load_prompt, format_messages
+from llm_factory_openai import BatchAsyncLLMAgent  
 
 
 #%%

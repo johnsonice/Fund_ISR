@@ -3,12 +3,26 @@
 
 # %%
 # Setup
-from dotenv import load_dotenv
-load_dotenv('../../.env')
 import os, sys
-sys.path.insert(0, '../../libs')
-sys.path.insert(0, '../../src/Traction/prompts')
-sys.path.insert(0, '../../src/Traction')
+from pathlib import Path
+
+# Compute repository root from this file's location
+# File is: <repo_root>/src/Traction/train_eval/evaluate_fiscal_monetray_pipeline.py
+# repo_root is 3 parents up
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+# Add necessary directories to sys.path
+sys.path.insert(0, str(_REPO_ROOT / 'libs'))
+sys.path.insert(0, str(_REPO_ROOT / 'src' / 'Traction' / 'prompts'))
+sys.path.insert(0, str(_REPO_ROOT / 'src' / 'Traction'))
+
+# Load environment variables
+from dotenv import load_dotenv
+_dotenv_path = _REPO_ROOT / '.env'
+if _dotenv_path.exists():
+    load_dotenv(_dotenv_path, override=False)
+else:
+    raise RuntimeError(f".env file not found at {_dotenv_path}")
 
 from llm_factory_openai import LLMAgent
 # Use _process_batch_async to process batch_messages
@@ -32,7 +46,7 @@ from pathlib import Path
 import pandas as pd
 from llm_batch_process_utils import _build_batch_messages_from_df_flexible
 from sklearn.metrics import f1_score, accuracy_score, confusion_matrix, precision_score, recall_score
-
+#%%
 # %% Configuration Constants
 DATA_FILE_PATHS = {
     'fiscal_stance': Path('/data/home/xiong/data/Fund/CSR/Tractions/Finetuning_data/labelled_fiscal_v2.xlsx'),
@@ -41,7 +55,7 @@ DATA_FILE_PATHS = {
     'monetary_agreement': Path('/data/home/xiong/data/Fund/CSR/Tractions/Finetuning_data/labelled_monetary_v6.xlsx'),
 }
 
-PROMPT_DIR = Path('../../src/Traction/prompts')
+PROMPT_DIR = _REPO_ROOT / 'src' / 'Traction' / 'prompts'
 AGREEMENT_LABELS = ['disagreement exists', 'mostly agree', 'irrelevant']
 STANCE_FIELDS = {
     'fiscal_stance': ['stance_near_term'],
@@ -154,6 +168,11 @@ def load_transform_data(data_file: Path, task_type: str):
         df_temp['type'] = tp
         df_stance = pd.concat([df_stance, df_temp], ignore_index=True)
 
+    # Reset index to match notebook behavior and avoid duplicate index issues
+    # The original 'index' column contains duplicates (same index for staff and buff rows)
+    # Drop it and create a new sequential index to ensure correct merge alignment
+    df_stance = df_stance.drop(columns=['index']).reset_index(names='index')
+
     # Get task-specific examples and explanations from imported constants
     example_dict = TASK_EXAMPLES.get(task_type, {})
     explanation_dict = TASK_EXPLANATIONS.get(task_type, {})
@@ -178,7 +197,7 @@ def evaluate_prompt_and_model(
     temperature: float = 1.0,
     batch_size: int = 8,
     reasoning_effort: str = 'medium',
-    max_completion_tokens: int = 2000,
+    max_completion_tokens: int = 15000,
     use_full_dataset: bool = True,
     return_dataframe: bool = False,
     verbose: bool = True,
@@ -250,7 +269,7 @@ def evaluate_prompt_and_model(
     # Step 4: Build messages
     batch_messages, batch_ids = _build_batch_messages_from_df_flexible(
         sample_df, prompt_template, column_mapping=column_mapping,
-        id_column='index', max_text_length=8000
+        id_column='index', max_text_length=20000
     )
 
     if verbose:
@@ -497,8 +516,9 @@ def run_comprehensive_evaluation(
 
 # %% Example Usage
 if __name__ == "__main__":
-    # Example 1: Fiscal only (default - both agreement and stance tasks)
-    metrics_df, result_dfs = run_comprehensive_evaluation()
+    # # Example 1: Fiscal only (default - both agreement and stance tasks)
+    # metrics_df, result_dfs = run_comprehensive_evaluation(models=['gpt-5-mini-2025-08-07','gpt-5-mini-2025-08-07',
+    #                                                               'gpt-5-2025-08-07'])
 
     # Example 2: Both fiscal and monetary
     # df_all = run_comprehensive_evaluation(domains=['fiscal', 'monetary'])
@@ -535,8 +555,49 @@ if __name__ == "__main__":
     # run_batch_evaluation('monetary', 'stance', models=['gpt-5'], use_full_dataset=True)
 
     # Example 4: Compare specific variants across models
-    # run_batch_evaluation('fiscal', 'agreement', models=['gpt-5', 'gpt-5-mini'],
-    #                      variants=['few_shot', 'chain_of_thought'])
+    # run_batch_evaluation('monetary', 'stance', models=['gpt-4o-2024-08-06'],#['gpt-5', 'gpt-5-mini'],
+    #                      variants=['chain_of_thought'])
 
+    # # =============================================================================
+    # # PHASE 1: GPT-5 Missing Variants (6 scenarios)
+    # # =============================================================================
+    # print("\n" + "="*100)
+    # print("PHASE 1: GPT-5 Missing Variants (6 scenarios)")
+    # print("="*100 + "\n")
 
+    # output_dir = Path('/data/home/xiong/data/Fund/CSR/Tractions/Finetuning_data/eval_results/phase1')
+    # output_dir.mkdir(parents=True, exist_ok=True)
+
+    # phase1_results = {}
+    # phase1_dataframes = {}
+
+    # phase1_scenarios = [
+    #     ('monetary_agreement_few_shot', 'gpt-5-2025-08-07'),
+    #     ('monetary_agreement_chain_of_thought', 'gpt-5-2025-08-07'),
+    #     ('monetary_agreement_with_definitions', 'gpt-5-2025-08-07'),
+    #     ('fiscal_agreement_chain_of_thought', 'gpt-5-2025-08-07'),
+    #     ('fiscal_agreement_with_definitions', 'gpt-5-2025-08-07'),
+    #     ('monetary_stance_with_definitions', 'gpt-5-2025-08-07'),
+    # ]
+
+    # for i, (prompt_key, model) in enumerate(phase1_scenarios, 1):
+    #     result_name = f"{prompt_key}_{model}"
+    #     print(f"[{i}/{len(phase1_scenarios)}] Running: {result_name}")
+
+    #     try:
+    #         metrics, df_result = evaluate_prompt_and_model(
+    #             prompt_key, model, use_full_dataset=True,
+    #             return_dataframe=True, verbose=True
+    #         )
+    #         phase1_results[result_name] = metrics
+    #         phase1_dataframes[result_name] = df_result
+    #         print("✓ Success\n")
+    #     except Exception as e:
+    #         print(f"✗ Error: {e}\n")
+
+    # # Save Phase 1 results
+    # if phase1_results:
+    #     phase1_metrics_df = compare_evaluations(phase1_results, sort_by='accuracy')
+    #     phase1_metrics_df.to_csv(output_dir / 'phase1_gpt5_missing.csv', index=False)
+    #     print(f"\n✓ Phase 1 metrics saved: {output_dir / 'phase1_gpt5_missing.csv'}\n")
 

@@ -11,7 +11,8 @@ import os
 if platform.system() == 'Windows':
     data_dir = Path(r"C:\Users\chuang\OneDrive - International Monetary Fund (PRD)\Faltermeier, Julia's files - FIP Traction of IMF surveillance\temp\data")
     raw_xml_dir = Path(r"C:\Users\chuang\OneDrive - International Monetary Fund (PRD)\AI tools\Data\ArticleIV_xml_updated")
+    output_dir = Path(data_dir / "output")
 else:  # Linux/Ubuntu
     data_dir = Path('/data/home/xiong/data/Fund/CSR/Tractions')
-    raw_xml_dir = os.path.join(data_dir, 'ArticleIV_xml_updated')
-    
+    raw_xml_dir = Path(data_dir / 'ArticleIV_xml_updated')
+    output_dir = Path(data_dir / "output")

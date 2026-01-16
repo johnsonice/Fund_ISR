@@ -1,12 +1,15 @@
+# Run fiscal stance inference (test-mode) with the chosen prompt variant.
 cd /data/home/xiong/dev/Fund_ISR/src/Traction/
-PROMPT_VARIANT=${PROMPT_VARIANT:-chain_of_thought}
+conda activate traction
+PROMPT_VARIANT=${PROMPT_VARIANT:-few_shot}
 
 python inference_agreement_stance.py stance \
   --domain fiscal \
   --prompt-variant "$PROMPT_VARIANT" \
   --submit \
   --post-process \
-  --model gpt-5-nano 
+  --model gpt-5 \
+  --max-output-tokens 20000
 
 
 # python inference_agreement_stance.py stance \
@@ -15,8 +18,9 @@ python inference_agreement_stance.py stance \
 #   --submit \
 #   --post-process \
 #   --test-mode \
-#   --model gpt-5-nano \
-#   --sample-size 1000
+#   --model gpt-5 \
+#   --sample-size 100 \
+#   --max-output-tokens 20000
 
 # python inference_agreement_stance.py stance \
 #   --domain fiscal \

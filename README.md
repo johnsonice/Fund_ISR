@@ -5,15 +5,25 @@ Complete end-to-end AI pipeline for analyzing IMF Article IV consultation report
 
 **Pipeline Coverage:** XML extraction → Topic classification → Stance/agreement inference → Statistical analysis → Visualization
 
+**Latest Updates (January 2026):**
+- ✨ Batch execution scripts for parallel inference processing
+- ✨ Comprehensive prompt library with 17+ templates (4 variants per task)
+- ✨ Complete evaluation study with GPT-4o/GPT-4o-mini/GPT-3.5-turbo
+- ✨ Flexible message building system with multi-column template support
+- ✨ PROMPT_REGISTRY for automatic schema-prompt mapping
+
 ## Key Features
 - **Topic Classification**: Classify paragraphs into 6 predefined macroeconomic categories with confidence scores (0-100)
 - **Stance Detection**: Extract monetary/fiscal policy stance (current + future direction) for both IMF staff and country authorities
 - **Agreement Analysis**: Identify staff-authorities agreement/disagreement with specific disagreement area extraction
 - **Production-Ready Inference**: Unified CLI (`inference_agreement_stance.py`) for both monetary and fiscal domains
+- **Batch Execution Scripts**: Shell scripts for parallel processing of all inference tasks with test/production modes
 - **Batch Processing**: Cost-effective large-scale analysis using OpenAI Batch API (50% cost reduction)
 - **Post-Estimation Analysis**: Income group classification, trend analysis, and publication-quality charts
+- **Comprehensive Prompt Library**: 17+ prompts with 4 variants per task (simple, with_definitions, few_shot, chain_of_thought)
 - **Structured Output**: Pydantic-validated responses with paragraph and document-level aggregations
 - **Fine-Tuning Support**: Complete pipeline for fine-tuning GPT-5-mini on domain-specific stance classification
+- **Flexible Message Building**: Template-based system supporting multi-column inputs with safe placeholder formatting
 
 ## Environment Setup
 
@@ -41,11 +51,13 @@ External data should be placed at `~/dev/Fund/CSR/Tractions/` (Linux) or configu
   - `paragraph_back2_doc.py` - Document-level aggregation
   - **`inference_agreement_stance.py`** - **Production stance/agreement inference** (NEW)
   - `llm_batch_process_utils.py` - Flexible message building utilities (NEW)
+  - **`scripts/`** - **Batch execution shell scripts** (NEW)
   - `post_estimate_analysis/` - Visualization toolkit (NEW)
   - `train_eval/` - Fine-tuning pipeline for GPT-5-mini
 - **`src/Traction/prompts/`** - 17+ Pydantic schemas and markdown prompt templates
   - 4 variants per task: simple, with_definitions, **few_shot** (recommended), chain_of_thought
   - Supports: topic classification, monetary/fiscal stance, monetary/fiscal agreement
+  - **PROMPT_REGISTRY** maps prompt keys to files and Pydantic response models
 - **`notebooks/Traction/`** - Evaluation notebooks, inference demos, and interactive analysis
 - **`src/Others/`** - Experimental scripts (vLLM inference, RAM table processing)
 
@@ -81,7 +93,10 @@ Stage 5: Post-Estimation Analysis
 - `topic_identification.py` / `topic_identification_batch.py` - Topic classification (async or batch)
 - `paragraph_back2_doc.py` - Aggregate to document level
 - **`inference_agreement_stance.py`** - **Unified stance/agreement inference CLI** (monetary & fiscal)
+- **`scripts/run_all.sh`** - **Parallel execution orchestrator** (runs all 4 inference tasks)
+- **`scripts/run_{domain}_{task}.sh`** - **Individual task runners** (monetary/fiscal × stance/agreement)
 - `post_estimate_analysis/data_vis_utils.py` - Visualization utilities (sector-agnostic, composable)
+- `llm_batch_process_utils.py` - Flexible message building with multi-column template support
 
 **Topic Categories:**
 1. Economic Outlook (GDP, growth, forecasts)
@@ -110,6 +125,15 @@ python src/Traction/topic_identification.py --test-mode  # Test mode (sample dat
 python src/Traction/paragraph_back2_doc.py
 
 # Step 4: Run stance & agreement inference (PRODUCTION)
+
+# Option A: Use batch execution scripts (recommended for parallel processing)
+bash src/Traction/scripts/run_all.sh                     # Run all tasks in parallel
+bash src/Traction/scripts/run_monetary_stance.sh         # Monetary stance only
+bash src/Traction/scripts/run_monetary_agreement.sh      # Monetary agreement only
+bash src/Traction/scripts/run_fiscal_stance.sh           # Fiscal stance only
+bash src/Traction/scripts/run_fiscal_agreement.sh        # Fiscal agreement only
+
+# Option B: Use CLI directly
 # Monetary agreement
 python src/Traction/inference_agreement_stance.py agreement \
   --domain monetary --submit --post-process
@@ -143,7 +167,30 @@ python src/Traction/inference_agreement_stance.py stance \
 # Use fine-tuned model
 python src/Traction/inference_agreement_stance.py stance \
   --domain monetary --model ft:gpt-5-mini:xxx --submit --post-process
+
+# Customize sample size for test mode
+python src/Traction/inference_agreement_stance.py stance \
+  --domain monetary --test-mode --sample-size 100 --submit --post-process
 ```
+
+### Batch Execution Scripts
+
+The `scripts/` directory provides convenient shell scripts for running inference tasks in parallel:
+
+```bash
+# Run all 4 tasks in parallel (monetary/fiscal × stance/agreement)
+bash src/Traction/scripts/run_all.sh
+
+# Individual scripts (run with environment variable to customize prompt)
+PROMPT_VARIANT=few_shot bash src/Traction/scripts/run_monetary_stance.sh
+PROMPT_VARIANT=chain_of_thought bash src/Traction/scripts/run_fiscal_agreement.sh
+```
+
+**Features:**
+- Automatic conda environment activation
+- Configurable prompt variants via `PROMPT_VARIANT` environment variable (default: `few_shot`)
+- Test mode enabled by default with configurable sample sizes
+- Parallel execution with failure detection (`run_all.sh`)
 
 **Available Tasks:**
 - `agreement` - Detect staff-authorities agreement/disagreement (requires staff + authority texts)
@@ -176,7 +223,17 @@ python src/Traction/inference_agreement_stance.py stance \
 jupyter notebook notebooks/Traction/evaluate_fiscal_monetray_pipeline.ipynb
 ```
 
-**Fine-tune GPT-5-mini for stance classification:**
+**Latest Evaluation Results (January 2026):**
+
+Comprehensive evaluation comparing GPT-4o, GPT-4o-mini, and GPT-3.5-turbo across multiple prompt strategies is available in [evaluation_results_replication.md](src/Traction/evaluation_results_replication.md).
+
+**Key Highlights:**
+- **Monetary Agreement**: GPT-4o + Simple Short achieves 73.7% accuracy
+- **Monetary Stance**: GPT-4o + Few-shot achieves 70.1% accuracy (merged labels)
+- **Fiscal Agreement**: GPT-4o achieves 70.0% accuracy (consistent across prompts)
+- **Fiscal Stance**: GPT-4o + Simple achieves 77.8% accuracy (merged labels)
+
+**Fine-tune GPT-4o-mini for stance classification:**
 ```bash
 cd src/Traction/train_eval
 python run_pipeline.py  # Complete pipeline (prepare → train → evaluate)
@@ -187,46 +244,67 @@ python finetune.py
 python evaluate.py
 ```
 
-Results saved to `notebooks/Traction/evaluation_results.md`.
+Fine-tuning documentation available in [train_eval/README.md](src/Traction/train_eval/README.md).
 
 ## Model Selection Guide
 
-**Recommended: GPT-5-mini (August 2025 release) - Best balance of cost and performance**
+**Recommended: GPT-4o (Latest evaluation: January 2026)**
 
-Based on evaluation results with previous generation models (`notebooks/Traction/evaluation_results.md`):
+Based on comprehensive evaluation results (`src/Traction/evaluation_results_replication.md`):
 
-### Agreement Classification
-- **GPT-5** + Few Shot: ~75-78% accuracy (premium, +3-5% over GPT-5-mini)
-- **GPT-5-mini** + Few Shot: ~72-75% accuracy (RECOMMENDED default)
-- **GPT-5-nano** + Few Shot: ~66-70% accuracy (budget option)
+### Monetary Policy Tasks
 
-### Stance Classification
-- **GPT-5** + Few Shot: ~74-78% accuracy (premium, +8-10% over GPT-5-mini)
-  - Current stance: 78.55%, Future stance: 69.55%
-- **GPT-5-mini** + Few Shot: ~65-70% accuracy (recommended baseline)
-- **Fine-tuned GPT-5-mini**: Target >75% accuracy (see `src/Traction/train_eval/`)
+**Agreement Classification:**
+- **GPT-4o** + Simple Short: **73.7% accuracy** (BEST, F1: 0.713)
+- GPT-4o + Few-shot: 72.3% accuracy (F1: 0.707)
+- GPT-4o + Chain of Thought: 72.0% accuracy (F1: 0.707)
+- GPT-4o-mini + Simple: 70.6% accuracy (F1: 0.665)
+- GPT-3.5-turbo + Simple: 55.4% accuracy (baseline)
+
+**Stance Classification:**
+- **GPT-4o** + Few-shot: **64.2% current, 66.1% future** (BEST raw accuracy)
+- GPT-4o + Few-shot (merged unclear/irrelevant): **70.1% current, 69.7% future**
+- GPT-4o + Simple (merged): 64.4% current, 70.4% future
+- GPT-4o-mini + Simple: 56.9% current, 65.4% future
+- Fine-tuning potential: Target >75% accuracy (see [train_eval/](src/Traction/train_eval/))
+
+### Fiscal Policy Tasks
+
+**Agreement Classification:**
+- **GPT-4o** + Any variant: **70.0% accuracy** (consistent across all prompts)
+  - Best F1 score: Chain of Thought (0.652)
+- GPT-4o-mini + Simple: 64.7% accuracy (F1: 0.573)
+- GPT-3.5-turbo + Simple: 57.7% accuracy (baseline)
+
+**Stance Classification:**
+- **GPT-4o** + Simple (merged unclear/irrelevant): **77.8% accuracy** (BEST, F1: 0.761)
+- GPT-4o + With Definition (merged): 77.0% accuracy (F1: 0.755)
+- GPT-4o + Chain of Thought: 65.7% accuracy (raw), 76.2% (merged)
+- GPT-4o-mini + Simple: 55.5% accuracy (raw), 55.8% (merged)
 
 ### Model Selection Strategy
 
-| Use Case | Recommended Model | Rationale |
-|----------|------------------|-----------|
-| **Agreement detection** | `gpt-5-mini` + few_shot | Cost-effective, 72-75% accuracy sufficient |
-| **Stance classification** | Fine-tuned `gpt-5-mini` | Best cost/performance after fine-tuning (>75%) |
-| **High-stakes analysis** | `gpt-5` + few_shot | Premium accuracy (74-78%) when precision is critical |
-| **Large-scale processing** | Batch API + `gpt-5-mini` | 50% cost reduction for bulk inference |
-| **Budget constraints** | `gpt-5-nano` + few_shot | 66-70% accuracy, lowest cost |
+| Use Case | Recommended Model + Prompt | Expected Accuracy | Notes |
+|----------|---------------------------|-------------------|-------|
+| **Monetary Agreement** | GPT-4o + Simple Short | 73.7% | Best overall |
+| **Monetary Stance** | GPT-4o + Few-shot | 64-70% | Merge unclear/irrelevant for better results |
+| **Fiscal Agreement** | GPT-4o + Chain of Thought | 70.0% | Consistent across all variants |
+| **Fiscal Stance** | GPT-4o + Simple | 77.8% | Best with merged labels |
+| **Budget-conscious** | GPT-4o-mini + Simple | 56-71% | 60-70% cost reduction |
+| **Fine-tuning** | Fine-tuned GPT-4o-mini | Target >75% | See [train_eval/](src/Traction/train_eval/) |
 
-**Model IDs (August 2025):**
-- `gpt-5-mini-2025-08-07` - Default for most tasks
-- `gpt-5-2025-08-07` - Premium for complex reasoning
-- `gpt-5-nano-2025-08-07` - Budget option
+**Available Model IDs (January 2026):**
+- `gpt-4o` - Current flagship model (recommended)
+- `gpt-4o-mini` - Cost-effective option
+- `gpt-3.5-turbo` - Legacy baseline (not recommended)
 
-**Key Findings:**
-- ✅ Always use `few_shot` prompts (consistently best across all models/tasks)
-- ✅ GPT-5-mini is the recommended default (best cost-performance tradeoff)
-- ✅ Fine-tuning GPT-5-mini improves stance accuracy by ~10% (+$0.50-2.00 per training run)
-- ⚠️ Avoid `with_definitions` prompts (consistently worst performer)
-- ⚠️ GPT-5 premium worth it for stance tasks if budget allows (+8-10% accuracy)
+**Key Findings (January 2026 Evaluation):**
+- ✅ **GPT-4o consistently outperforms GPT-4o-mini** across all tasks
+- ✅ **Prompt selection matters**: Few-shot best for monetary stance, Simple best for fiscal stance
+- ✅ **Merging unclear/irrelevant labels** improves accuracy by 5-13% for stance tasks
+- ✅ **Fiscal stance easier than monetary**: 77.8% vs 70.1% accuracy with merged labels
+- ⚠️ **No single "best prompt"**: Optimal varies by task (simple vs few_shot vs chain_of_thought)
+- ⚠️ **GPT-3.5-turbo significantly underperforms**: 55-59% accuracy (15-20% gap vs GPT-4o)
 
 ## Post-Estimation Analysis
 
@@ -270,6 +348,78 @@ plot_stacked_proportions_by_year(share)
 
 See `src/Traction/post_estimate_analysis/data_vis.ipynb` for complete examples.
 
+## Prompt Library & Message Building
+
+### Comprehensive Prompt Collection
+
+The [prompts/](src/Traction/prompts/) directory contains 17+ production-ready markdown templates with systematic organization:
+
+**Prompt Variants (4 per task):**
+1. **`simple`** - Minimal instructions, fastest processing
+2. **`with_definitions`** - Detailed category definitions and guidelines
+3. **`few_shot`** - Includes example inputs/outputs (often performs best)
+4. **`chain_of_thought`** - Adds reasoning step before classification
+
+**Available Prompts:**
+- `topic_classification.md` - 6-category macroeconomic topic classifier
+- `monetary_stance_{variant}.md` - Monetary policy stance (4 variants)
+- `monetary_agreement_{variant}.md` - Staff-authorities monetary agreement (4 variants)
+- `fiscal_stance_{variant}.md` - Fiscal policy stance (4 variants)
+- `fiscal_agreement_{variant}.md` - Staff-authorities fiscal agreement (4 variants)
+
+**Template Placeholders:**
+- `{TEXT}` - Single text input
+- `{STAFF}`, `{AUTHORITY}` - Multi-column inputs for agreement tasks
+- `{COUNTRY}`, `{YEAR}`, `{TYPE}` - Metadata fields
+- `{EXPLANATION}`, `{EXAMPLES}` - Dynamic content injection
+
+### PROMPT_REGISTRY
+
+The [prompts/schema.py](src/Traction/prompts/schema.py) module provides automatic mapping:
+
+```python
+from src.Traction.prompts.schema import PROMPT_REGISTRY
+
+# Automatically loads prompt file and Pydantic response model
+registry_entry = PROMPT_REGISTRY['monetary_stance_few_shot']
+# registry_entry = {
+#     'file': 'monetary_stance_few_shot.md',
+#     'response_model': MonetaryStanceResponse
+# }
+```
+
+**Pydantic Response Models:**
+- `TopicResponse` - Topic classification with confidence scores
+- `MonetaryStanceResponse` / `MonetaryStanceChainOfThoughtResponse` - Current + future stance
+- `MonetaryAgreementResponse` / `MonetaryAgreementChainOfThoughtResponse` - Agreement + disagreement areas
+- `FiscalStanceResponse` / `FiscalStanceChainOfThoughtResponse` - Fiscal stance classification
+- `FiscalAgreementResponse` / `FiscalAgreementChainOfThoughtResponse` - Fiscal agreement detection
+
+### Flexible Message Building
+
+The [llm_batch_process_utils.py](src/Traction/llm_batch_process_utils.py) module provides template-based message building:
+
+**Key Functions:**
+- `_build_batch_messages_from_df()` - Single-column simple processing
+- `_build_batch_messages_from_df_flexible()` - Multi-column template system
+  - Supports placeholders like `{STAFF}`, `{AUTHORITY}`, `{COUNTRY}`, `{YEAR}`
+  - Safe placeholder formatting (avoids conflicts with JSON examples in prompts)
+  - Flexible column mapping: `column_mapping={'STAFF': 'imf_text', 'AUTHORITY': 'auth_text'}`
+
+**Example Usage:**
+```python
+from src.Traction.llm_batch_process_utils import _build_batch_messages_from_df_flexible
+
+# Agreement task: merge staff + authority texts
+messages = _build_batch_messages_from_df_flexible(
+    df=df,
+    system_prompt="You are an IMF policy analyst...",
+    user_prompt_template="Staff view: {STAFF}\n\nAuthority view: {AUTHORITY}\n\nDo they agree?",
+    column_mapping={'STAFF': 'staff_text', 'AUTHORITY': 'authority_text'},
+    id_column='document_id'
+)
+```
+
 ## Project Status
 
 **Completed:**
@@ -277,18 +427,22 @@ See `src/Traction/post_estimate_analysis/data_vis.ipynb` for complete examples.
 - [x] ~~Implement monetary and fiscal policy stance extraction with agreement metrics~~
 - [x] ~~Extend document ingestion to cover 2024-2025 Article IV reports~~
 - [x] ~~Develop External Sector methodology for balance/exchange rate analysis~~
-- [x] **Build production pipeline for stance and agreement classification (`inference_agreement_stance.py`)**
-- [x] **Implement flexible batch processing utilities for multi-column prompts**
-- [x] **Create post-estimation analysis toolkit with publication-ready visualizations**
-- [x] **Develop fine-tuning pipeline for domain-specific stance classification**
+- [x] **Build production pipeline for stance and agreement classification ([inference_agreement_stance.py](src/Traction/inference_agreement_stance.py))**
+- [x] **Implement flexible batch processing utilities for multi-column prompts ([llm_batch_process_utils.py](src/Traction/llm_batch_process_utils.py))**
+- [x] **Create post-estimation analysis toolkit with publication-ready visualizations ([post_estimate_analysis/](src/Traction/post_estimate_analysis/))**
+- [x] **Develop fine-tuning pipeline for domain-specific stance classification ([train_eval/](src/Traction/train_eval/))**
 - [x] **Build complete pipeline for fiscal policy stance and agreement classification**
 - [x] **Reproduce all data visualizations with updated results**
+- [x] **Create batch execution scripts for parallel inference ([scripts/](src/Traction/scripts/))** (Jan 2026)
+- [x] **Build comprehensive prompt library with 4 variants per task ([prompts/](src/Traction/prompts/))** (Jan 2026)
+- [x] **Complete evaluation study with GPT-4o/GPT-4o-mini/GPT-3.5-turbo** (Jan 2026)
+- [x] **Implement PROMPT_REGISTRY for automatic schema-prompt mapping** (Jan 2026)
 
 **In Progress:**
-- [ ] Investigate fiscal sector prompts and performance (comparison with monetary sector)
-- [ ] Extend time series coverage with 2023-2025 Article IV reports
 - [ ] Scale fine-tuning pipeline to additional policy domains
 - [ ] Integrate external sector stance analysis into unified CLI
+- [ ] Optimize prompt strategies based on latest evaluation results
+- [ ] Extend time series coverage with 2025-2026 Article IV reports
 
 ## Citation
 

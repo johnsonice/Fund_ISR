@@ -103,6 +103,7 @@ def _create_batch_jsonl(
     response_model: Type[BaseModel],
     message_builder: str,
     builder_kwargs: Dict[str, Any],
+    max_output_tokens: int = 8000,
 ) -> List[str]:
     """Create a JSONL file compatible with OpenAI Batch requests.
 
@@ -123,9 +124,9 @@ def _create_batch_jsonl(
     with open(output_jsonl_path, 'w', encoding='utf-8') as f:
         for msg_id, messages in zip(batch_ids, batch_messages):
             if endpoint == '/v1/chat/completions':
-                body = {"model": model, "messages": messages, "temperature": temperature, "response_format": response_format}
+                body = {"model": model, "messages": messages, "temperature": temperature, "response_format": response_format, "max_completion_tokens": max_output_tokens}
             else:
-                body = {"model": model, "input": messages, "temperature": temperature, "response_format": response_format}
+                body = {"model": model, "input": messages, "temperature": temperature, "response_format": response_format, "max_output_tokens": max_output_tokens}
             request_obj = {"custom_id": str(msg_id), "method": "POST", "url": endpoint, "body": body}
             f.write(json.dumps(request_obj, ensure_ascii=False) + "\n")
 
@@ -241,6 +242,7 @@ def _build_and_optionally_submit(
             'id_column': id_column,
             'max_text_length': args.max_input_length,
         },
+        max_output_tokens=args.max_output_tokens,
     )
     print(f"Wrote {len(ids)} requests to {jsonl_path}")
 
@@ -296,6 +298,7 @@ def _add_common_cli(parser):
     parser.add_argument('--post-process', action='store_true', default=False)
     parser.add_argument('--results-jsonl', type=str, default=None)
     parser.add_argument('--prompt-variant', type=str, default='few_shot', help="Prompt key suffix; expects PROMPT_REGISTRY key pattern {domain}_{task}_{variant}")
+    parser.add_argument('--max-output-tokens', type=int, default=8000, help='Maximum tokens for model output (default: 2000)')
     return parser
 
 
@@ -308,13 +311,13 @@ def parse_args(argv=None):
     p_agree = sub.add_parser('agreement', help='Infer agreement between staff and authority')
     _add_common_cli(p_agree)
     p_agree.add_argument('--domain', type=str, choices=['monetary', 'fiscal'], required=False, default='monetary')
-    p_agree.add_argument('--max-input-length', type=int, default=8000)
+    p_agree.add_argument('--max-input-length', type=int, default=20000)
 
     # Stance task
     p_stance = sub.add_parser('stance', help='Infer stance for each row')
     _add_common_cli(p_stance)
     p_stance.add_argument('--domain', type=str, choices=['monetary', 'fiscal'], required=True,default='monetary')
-    p_stance.add_argument('--max-input-length', type=int, default=8000)
+    p_stance.add_argument('--max-input-length', type=int, default=20000)
 
     # Default to agreement task in interactive/no-args mode and when subcommand omitted
     parser.set_defaults(task='agreement')
