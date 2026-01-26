@@ -6,6 +6,7 @@ Creates dual examples (staff + authority) from each row.
 """
 #%%
 import sys
+import argparse
 import json
 from pathlib import Path
 from typing import List, Dict, Any, Tuple
@@ -49,13 +50,10 @@ def load_excel_data(file_path: Path, logger) -> pd.DataFrame:
     logger.info(f"Loading data from: {file_path}")
     df = pd.read_excel(file_path)
 
-    logger.info(f"Loaded {len(df)} rows, {len(df.columns)} columns")
-
+    logger.info(f"Loaded {len(df)} rows")
     # Validate required columns
     required_cols = list(config.EXCEL_COLUMNS.values())
     validate_dataframe(df, required_cols)
-
-    logger.info(f"✓ All required columns present")
 
     return df
 
@@ -63,23 +61,15 @@ def load_excel_data(file_path: Path, logger) -> pd.DataFrame:
 def load_prompt_template(template_path: Path, logger) -> Dict[str, str]:
     """
     Load monetary_stance_simple.md using libs/prompt_utils.py.
-
     Args:
         template_path: Path to prompt markdown file
         logger: Logger instance
-
     Returns:
         Dictionary with 'system', 'user', 'schema' sections
     """
     logger.info(f"Loading prompt template from: {template_path}")
-
     prompt = load_prompt(template_path)
-
-    # Extract sections
-    sections = prompt.sections
-
-    logger.info(f"✓ Loaded prompt with sections: {list(sections.keys())}")
-
+    sections = prompt.sections # Extract sections
     return sections
 
 
@@ -200,8 +190,6 @@ def prepare_dataset(
     """
     examples = []
 
-    logger.info("Generating training examples...")
-
     for idx, row in tqdm(df.iterrows(), total=len(df), desc="Processing rows"):
         # Create staff example
         staff_example = create_training_example(
@@ -231,8 +219,6 @@ def prepare_dataset(
         if buff_example:
             examples.append(buff_example)
 
-    logger.info(f"✓ Generated {len(examples)} examples from {len(df)} rows")
-
     return examples
 
 
@@ -256,8 +242,6 @@ def generate_stats_report(
     Returns:
         Statistics dictionary
     """
-    logger.info("Generating statistics report...")
-
     def extract_labels(examples):
         """Extract stance labels from examples."""
         current_labels = []
@@ -310,22 +294,109 @@ def generate_stats_report(
         }
     }
 
-    # Log summary
-    logger.info(f"\n{'='*60}")
-    logger.info("Dataset Statistics:")
-    logger.info(f"{'='*60}")
-    logger.info(f"Training examples: {stats['dataset_size']['train']}")
-    logger.info(f"Test examples: {stats['dataset_size']['test']}")
-    logger.info(f"Total examples: {stats['dataset_size']['total']}")
-    logger.info(f"\nTrain - Current stance distribution:")
-    for label, count in stats['label_distributions']['train']['stance_current'].items():
-        logger.info(f"  {label}: {count}")
-    logger.info(f"\nTrain - Future stance distribution:")
-    for label, count in stats['label_distributions']['train']['stance_future'].items():
-        logger.info(f"  {label}: {count}")
-    logger.info(f"{'='*60}\n")
-
     return stats
+
+# ============================================================================
+# Argument Parsing & Validation
+# ============================================================================
+def parse_arguments() -> argparse.Namespace:
+    """
+    Parse command-line arguments for data preparation script.
+
+    Returns:
+        Parsed arguments namespace.
+    """
+    parser = argparse.ArgumentParser(
+        description="Prepare JSONL data for fine-tuning (train/test + stats)."
+    )
+    parser.add_argument(
+        "--training-excel",
+        type=Path,
+        default=config.TRAINING_EXCEL,
+        help="Path to training Excel file",
+    )
+    parser.add_argument(
+        "--testing-excel",
+        type=Path,
+        default=config.TESTING_EXCEL,
+        help="Path to testing Excel file",
+    )
+    parser.add_argument(
+        "--prompt-template",
+        type=Path,
+        default=config.PROMPT_TEMPLATE_PATH,
+        help="Path to prompt template markdown file",
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=config.OUTPUT_DIR,
+        help="Output directory for JSONL and stats files",
+    )
+    parser.add_argument(
+        "--train-jsonl",
+        type=Path,
+        default=None,
+        help="Output path for training JSONL (defaults to output dir)",
+    )
+    parser.add_argument(
+        "--test-jsonl",
+        type=Path,
+        default=None,
+        help="Output path for testing JSONL (defaults to output dir)",
+    )
+    parser.add_argument(
+        "--data-stats-json",
+        type=Path,
+        default=None,
+        help="Output path for dataset statistics JSON (defaults to output dir)",
+    )
+    parser.add_argument(
+        "--log-dir",
+        type=Path,
+        default=config.LOG_DIR,
+        help="Log directory",
+    )
+
+    return parser.parse_args()
+
+
+def resolve_output_paths(args: argparse.Namespace) -> Tuple[Path, Path, Path, Path]:
+    """
+    Resolve output paths based on CLI args and defaults.
+
+    Returns:
+        output_dir, train_jsonl, test_jsonl, data_stats_json
+    """
+    output_dir = args.output_dir
+    train_jsonl = args.train_jsonl or (output_dir / "train.jsonl")
+    test_jsonl = args.test_jsonl or (output_dir / "test.jsonl")
+    data_stats_json = args.data_stats_json or (output_dir / "data_stats.json")
+
+    return output_dir, train_jsonl, test_jsonl, data_stats_json
+
+
+def validate_paths(
+    training_excel: Path,
+    testing_excel: Path,
+    prompt_template: Path,
+    output_dir: Path,
+):
+    """Validate required inputs and ensure output directory exists."""
+    missing = []
+    if not training_excel.exists():
+        missing.append(str(training_excel))
+    if not testing_excel.exists():
+        missing.append(str(testing_excel))
+    if not prompt_template.exists():
+        missing.append(str(prompt_template))
+
+    if missing:
+        raise FileNotFoundError(
+            "Required input files not found:\n" + "\n".join(f"  - {p}" for p in missing)
+        )
+
+    output_dir.mkdir(parents=True, exist_ok=True)
 
 #%%
 # ============================================================================
@@ -334,47 +405,43 @@ def generate_stats_report(
 
 def main():
     """Main execution pipeline."""
-    # Setup logging
-    logger = setup_logging(config.LOG_DIR, "prepare_data")
+    args = parse_arguments()
+    output_dir, train_jsonl, test_jsonl, data_stats_json = resolve_output_paths(args)
 
-    logger.info("="*60)
-    logger.info("Starting data preparation pipeline")
-    logger.info("="*60)
+    # Setup logging
+    logger = setup_logging(args.log_dir, "prepare_data")
 
     try:
         # Validate paths
-        config.validate_paths()
+        validate_paths(
+            training_excel=args.training_excel,
+            testing_excel=args.testing_excel,
+            prompt_template=args.prompt_template,
+            output_dir=output_dir,
+        )
 
         # Load prompt template
-        prompt_sections = load_prompt_template(config.PROMPT_TEMPLATE_PATH, logger)
+        prompt_sections = load_prompt_template(args.prompt_template, logger)
 
         # Load training data
-        train_df = load_excel_data(config.TRAINING_EXCEL, logger)
+        train_df = load_excel_data(args.training_excel, logger)
         train_examples = prepare_dataset(train_df, prompt_sections, logger)
 
         # Load testing data
-        test_df = load_excel_data(config.TESTING_EXCEL, logger)
+        test_df = load_excel_data(args.testing_excel, logger)
         test_examples = prepare_dataset(test_df, prompt_sections, logger)
 
         # Save JSONL files
-        logger.info(f"Saving training data to: {config.TRAIN_JSONL}")
-        save_jsonl(train_examples, config.TRAIN_JSONL)
+        save_jsonl(train_examples, train_jsonl)
 
-        logger.info(f"Saving test data to: {config.TEST_JSONL}")
-        save_jsonl(test_examples, config.TEST_JSONL)
+        save_jsonl(test_examples, test_jsonl)
 
         # Generate and save statistics
         stats = generate_stats_report(train_examples, test_examples, logger)
-        logger.info(f"Saving statistics to: {config.DATA_STATS_JSON}")
-        save_json(stats, config.DATA_STATS_JSON)
+        save_json(stats, data_stats_json)
 
-        logger.info("="*60)
-        logger.info("✓ Data preparation completed successfully!")
-        logger.info("="*60)
-        logger.info(f"Output files:")
-        logger.info(f"  - {config.TRAIN_JSONL}")
-        logger.info(f"  - {config.TEST_JSONL}")
-        logger.info(f"  - {config.DATA_STATS_JSON}")
+        logger.info("Data preparation completed successfully.")
+        logger.info(f"Outputs: {train_jsonl}, {test_jsonl}, {data_stats_json}")
 
         return 0
 
@@ -382,6 +449,6 @@ def main():
         logger.error(f"Error during data preparation: {e}", exc_info=True)
         return 1
 
-
+#%%
 if __name__ == "__main__":
     sys.exit(main())
