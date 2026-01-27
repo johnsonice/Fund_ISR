@@ -9,11 +9,11 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
-# Add project paths
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
-
 import training_config as config
+
+# Add project paths using config
+PROJECT_ROOT = config.PROJECT_ROOT
+sys.path.insert(0, str(PROJECT_ROOT))
 from training_utils import setup_logging, load_json
 
 # Import pipeline modules

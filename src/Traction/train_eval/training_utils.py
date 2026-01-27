@@ -15,6 +15,7 @@ from functools import wraps
 import time
 
 import pandas as pd
+from collections import defaultdict
 from openai import OpenAI
 from dotenv import load_dotenv
 
@@ -172,6 +173,64 @@ def load_json(file_path: Path) -> Dict[str, Any]:
 
 
 # ============================================================================
+# Finetuning Dataset Validation
+# ============================================================================
+def check_finetuning_dataset(filepath):
+    # Load the dataset
+    with open(filepath, 'r', encoding='utf-8') as f:
+        dataset = [json.loads(line) for line in f]
+
+    # Initial dataset stats
+    print("Num examples:", len(dataset))
+    print("First example:")
+    for message in dataset[-1]["messages"]:
+        print(message)
+
+    # Format error checks
+    format_errors = defaultdict(int)
+
+    for ex in dataset:
+        if not isinstance(ex, dict):
+            format_errors["data_type"] += 1
+            continue
+
+        messages = ex.get("messages", None)
+        if not messages:
+            format_errors["missing_messages_list"] += 1
+            continue
+
+        for message in messages:
+            if "role" not in message or "content" not in message:
+                format_errors["message_missing_key"] += 1
+
+            if any(k not in (
+            "role", "content", "name", "function_call", "weight") for k in
+                   message):
+                format_errors["message_unrecognized_key"] += 1
+
+            if message.get("role", None) not in (
+            "system", "user", "assistant", "function"):
+                format_errors["unrecognized_role"] += 1
+
+            content = message.get("content", None)
+            function_call = message.get("function_call", None)
+
+            if (not content and not function_call) or not isinstance(content,
+                                                                     str):
+                format_errors["missing_content"] += 1
+
+        if not any(message.get("role", None) == "assistant" for message in
+                   messages):
+            format_errors["example_missing_assistant_message"] += 1
+
+    if format_errors:
+        print("Found errors:")
+        for k, v in format_errors.items():
+            print(f"{k}: {v}")
+    else:
+        print("No errors found")
+        
+# ============================================================================
 # DataFrame Validation
 # ============================================================================
 
@@ -288,6 +347,56 @@ def create_output_dir(path: Path):
         path: Directory path to create
     """
     path.mkdir(parents=True, exist_ok=True)
+
+
+# ============================================================================
+# Evaluation Report
+# ============================================================================
+
+def write_evaluation_report(results: Dict, model_id: str, task_type: str, report_file: Path):
+    """
+    Write evaluation report to markdown.
+
+    Args:
+        results: Dict with metric names as keys, each containing accuracy/precision/recall/f1.
+                 For stance tasks, includes '{field}_combined' keys for combined unclear/irrelevant.
+        model_id: Fine-tuned model ID
+        task_type: Task type (monetary_stance, fiscal_stance, etc.)
+        report_file: Output path for markdown report
+    """
+    lines = [
+        "# Evaluation Report",
+        "",
+        f"**Model**: `{model_id}`",
+        f"**Task**: `{task_type}`",
+        f"**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+        "",
+        "## Results",
+        "",
+    ]
+
+    is_stance_task = 'stance' in task_type
+
+    if is_stance_task:
+        lines.extend([
+            "| Field | Accuracy | F1 | Accuracy (combined) | F1 (combined) |",
+            "|-------|----------|-----|---------------------|---------------|",
+        ])
+        for field in [f for f in results if not f.endswith('_combined')]:
+            m = results[field]
+            mc = results.get(f'{field}_combined', m)
+            lines.append(f"| {field} | {m['accuracy']:.4f} | {m['f1']:.4f} | {mc['accuracy']:.4f} | {mc['f1']:.4f} |")
+    else:
+        lines.extend([
+            "| Field | Accuracy | Precision | Recall | F1 |",
+            "|-------|----------|-----------|--------|-----|",
+        ])
+        for field, m in results.items():
+            lines.append(f"| {field} | {m['accuracy']:.4f} | {m['precision']:.4f} | {m['recall']:.4f} | {m['f1']:.4f} |")
+
+    report_file.parent.mkdir(parents=True, exist_ok=True)
+    report_file.write_text('\n'.join(lines))
+    print(f"Report saved: {report_file}")
 
 
 # ============================================================================
