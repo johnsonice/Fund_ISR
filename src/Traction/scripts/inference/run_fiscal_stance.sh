@@ -1,6 +1,6 @@
 # Run fiscal stance inference (test-mode) with the chosen prompt variant.
 cd /data/home/xiong/dev/Fund_ISR/src/Traction/
-conda activate traction
+eval "$(conda shell.bash hook)" && conda activate traction
 PROMPT_VARIANT=${PROMPT_VARIANT:-few_shot}
 
 python inference_agreement_stance.py stance \
@@ -8,8 +8,8 @@ python inference_agreement_stance.py stance \
   --prompt-variant "$PROMPT_VARIANT" \
   --submit \
   --post-process \
-  --model gpt-5 \
-  --max-output-tokens 20000
+  --model ft:gpt-4.1-2025-04-14:protagolabs:fiscal-stance:D2Lw2NJZ \
+  --max-output-tokens 16384
 
 
 # python inference_agreement_stance.py stance \
