@@ -4,8 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
+**Completed:**
+- [x] Experiment fine-tuned pipeline with the formalized prompts for both monetary and fiscal domains
+- [x] Comprehensive evaluation across GPT-4o, GPT-5, GPT-5-mini, and GPT-4.1 fine-tuned models
+- [x] Modular fine-tuning pipeline supporting all four task types (monetary/fiscal stance/agreement)
+
 **To Do:**
-- [ ] Experiment fine-tuned pipeline with the formalized prompts for both monetary and fiscal domains
 - [ ] Extend data range to current (2025-2026 Article IV reports)
 - [ ] Explore training strategies beyond SFT (e.g., RFT, RLHF)
 
@@ -158,12 +162,13 @@ plot_group_lines_by_year(proportions, groups=['ALL', 'AE', 'EM', 'LIC'])
 
 ### Evaluation & Development
 
-- **Evaluation Pipeline**: `notebooks/Traction/evaluate_fiscal_monetray_pipeline.ipynb`
-  - Function: `evaluate_prompt_and_model(prompt_key, model_name, data_dir, use_full_dataset=True)`
+- **Evaluation Pipeline**: `src/Traction/train_eval/evaluate_fiscal_monetray_pipeline.py`
+  - Function: `evaluate_prompt_and_model(prompt_key, model_name, data_file, use_full_dataset=True)`
+  - Function: `run_comprehensive_evaluation(domains, models, variants)` for batch evaluation
   - Supports monetary/fiscal stance and agreement tasks
-  - **Latest results**: `src/Traction/evaluation_results_replication.md` - Comprehensive replication study with highlighted best performers
-  - Comprehensive evaluation results in `src/Traction/evaluation_results.md`
-  - Quick evaluation summary in `src/Traction/temp/temp_eval.md`
+  - Auto-sets temperature based on model type (GPT-4o: 0, GPT-5: 1.0)
+  - **Latest results**: `src/Traction/docs/evaluation_results_comprehensive_current.md` - GPT-4o vs GPT-5 vs GPT-4.1 fine-tuned comparison
+  - Replication results in `src/Traction/docs/evaluation_results_replication.md`
 - **Inference Demos**:
   - `llm_fiscal_monetary_inference_demo.ipynb`: End-to-end inference examples
   - `llm_fiscal_monetary_eval_demo.ipynb`: Evaluation workflow demonstrations
@@ -197,16 +202,22 @@ plot_group_lines_by_year(proportions, groups=['ALL', 'AE', 'EM', 'LIC'])
     - `config.py`: Cross-platform path configuration
   - **Prompts & schemas:**
     - `prompts/schema.py`: Pydantic models and PROMPT_REGISTRY
+    - `prompts/prompt_examples.py`: Task-specific examples, explanations, and column mappings
     - `prompts/*.md`: Markdown prompt templates (4 variants per task)
   - **Post-estimation analysis:**
     - `post_estimate_analysis/data_vis_utils.py`: Visualization utilities (sector-agnostic)
-    - `post_estimate_analysis/data_vis.ipynb`: Interactive analysis notebook
-  - **Fine-tuning pipeline:**
-    - `train_eval/`: Fine-tuning pipeline for GPT-5-mini stance classification (see Fine-Tuning section)
+    - `post_estimate_analysis/data_vis_v4.ipynb`: Latest analysis notebook
+    - `post_estimate_analysis/compare_old_new_pipeline.ipynb`: Pipeline comparison
+  - **Fine-tuning & evaluation pipeline:**
+    - `train_eval/`: Fine-tuning pipeline for GPT-4.1-mini (see Fine-Tuning section)
+    - `train_eval/evaluate_fiscal_monetray_pipeline.py`: Comprehensive model/prompt evaluation
+  - **Documentation:**
+    - `docs/evaluation_results_comprehensive_current.md`: Latest evaluation results
+    - `docs/evaluation_results_replication.md`: Replication study
+    - `docs/Data_Process_Documentation.md`: Data processing documentation
   - **Legacy & reference code:**
-    - `reference_code/`: Legacy scripts from earlier pipeline iterations (1-13 numbered scripts)
-    - `temp/`: Temporary scripts and evaluation summaries
-    - `scripts/`: Shell scripts for batch execution
+    - `temp/reference_code/`: Legacy scripts from earlier pipeline iterations (1-13 numbered scripts)
+    - `temp/`: Temporary scripts and backups
 
 - **`src/Others/`**: Experimental scripts and one-off analyses
   - `async_inference.py`: Async inference with vLLM server
@@ -299,7 +310,11 @@ Unified production script with modular design:
   - **Stance analysis**: `pivot_stance_wide()`, `compute_imf_vs_authority_share()`
   - **Plotting helpers**: `plot_group_lines_by_year()`, `plot_stacked_proportions_by_year()`, `plot_category_trends()`
   - **Design philosophy**: Sector-agnostic, composable functions that return data (not side effects)
-- **`data_vis.ipynb`**: Comprehensive analysis notebook demonstrating all utilities
+- **Notebooks:**
+  - `data_vis_v4.ipynb`: Latest comprehensive analysis notebook (current version)
+  - `data_vis_v3.ipynb`: Previous version of analysis notebook
+  - `compare_old_new_pipeline.ipynb`: Comparison between old and new pipeline results
+  - `results_data_transformation.ipynb`: Data transformation utilities for results
 
 ### Topic Classification System
 
@@ -321,8 +336,13 @@ Unified production script with modular design:
 - Handles concurrent async API calls with progress tracking
 - Supports structured output via Pydantic models
 - Built-in retry logic and error handling
-- Recommended models: `gpt-5-mini` (recommended default, cost-effective), `gpt-5` (premium, higher accuracy), `gpt-5-nano` (budget)
-- Model IDs: `gpt-5-mini-2025-08-07`, `gpt-5-2025-08-07`, `gpt-5-nano-2025-08-07`
+- Recommended models:
+  - **Production**: Fine-tuned `gpt-4.1-mini` (best accuracy)
+  - **Zero-shot**: `gpt-5` (premium), `gpt-5-mini` (cost-effective), `gpt-5-nano` (budget)
+- Model IDs:
+  - `gpt-4.1-mini-2025-04-14` (fine-tuning base, April 2025)
+  - `gpt-5-2025-08-07`, `gpt-5-mini-2025-08-07`, `gpt-5-nano-2025-08-07` (August 2025)
+  - `gpt-4o-2024-08-06` (legacy comparison)
 
 **Batch Processing Workflow:**
 1. Build batch messages from DataFrame (`_build_batch_messages_from_df`)
@@ -448,41 +468,44 @@ The repository implements a complete pipeline from raw XML to publication-ready 
 
 ## Model & Prompt Selection Guide
 
-**Recommended Approach: Use GPT-5-mini as default (GPT-5 series, August 2025)**
+**Recommended Approach: Use GPT-4.1 fine-tuned for production, GPT-5 for zero-shot**
 
-Based on comprehensive evaluation results (`src/Traction/evaluation_results.md`):
+Based on comprehensive evaluation results (`src/Traction/docs/evaluation_results_comprehensive_current.md`):
 
-**Agreement Classification (Monetary):**
-- **GPT-5** + Few Shot: **74.74%** accuracy (best overall, F1: 0.7327)
-- **GPT-5-mini** + Few Shot: **71.97%** accuracy (recommended cost-effective, F1: 0.6944)
-- **GPT-5-nano** + Few Shot: **66.44%** accuracy (budget option, F1: 0.6395)
-- Performance gap: ~3% between GPT-5 and GPT-5-mini
+**Production Recommendation: Fine-tuned GPT-4.1-mini**
+- Consistently outperforms all base models across all tasks
+- 10-18% absolute improvement over base GPT-5-mini
+- Simple prompts work best with fine-tuned models
 
-**Stance Classification (Monetary):**
-- **GPT-5** + Few Shot: **74.05%** average accuracy (78.55% current, 69.55% future)
-- **GPT-5-mini** + Few Shot: **65.40%** average accuracy (67.47% current, 63.32% future)
-- **Fine-tuned GPT-4.1-mini**: **78-83%** accuracy (see Fine-Tuning section below)
-- Performance gap: ~8.6% between GPT-5 and GPT-5-mini (larger than agreement task)
+**Zero-shot Model Selection:**
 
-**Model IDs (August 2025 release):**
-- `gpt-5-mini-2025-08-07` - Recommended default for most tasks
-- `gpt-5-2025-08-07` - Most advanced model, best for complex reasoning
-- `gpt-5-nano-2025-08-07` - Most cost-effective option
+| Use Case | Model | Prompt | Expected Accuracy |
+|----------|-------|--------|-------------------|
+| Agreement (cost-effective) | GPT-5-mini | Few-shot | ~71-72% |
+| Agreement (best quality) | GPT-5 | Few-shot | ~74% |
+| Stance (cost-effective) | GPT-5-mini | Few-shot | ~67-68% |
+| Stance (best quality) | GPT-5 | Few-shot | ~75-79% |
+| Production (all tasks) | GPT-4.1 Fine-tuned | Simple | ~74-84% |
+
+**Model IDs:**
+- `gpt-4.1-mini-2025-04-14` - Base model for fine-tuning (April 2025)
+- `gpt-5-mini-2025-08-07` - Cost-effective zero-shot (August 2025)
+- `gpt-5-2025-08-07` - Best zero-shot performance (August 2025)
+- `gpt-4o-2024-08-06` - Legacy comparison baseline
 
 **Key Findings:**
-- **Default recommendation**: Use `gpt-5-mini` with `few_shot` prompts for cost-effective performance
-- **Always use Few Shot prompts** - consistently best across ALL models and tasks (2-8% better than other variants)
-- **Upgrade to GPT-5 for stance tasks** - larger performance gain (8.6%) vs agreement tasks (3%)
-- **Avoid "With Definitions" prompts** - consistently worst performer (3-8% accuracy drop)
-- **Fine-tuning delivers significant gains**: Fine-tuned GPT-4.1-mini achieves 78-83% stance accuracy (vs 65% base GPT-5-mini)
-- **Temporal difficulty**: Current stance prediction is 4-9% easier than future stance across all models
-- **For production stance classification**: Fine-tuning recommended (see `src/Traction/train_eval/`)
+- **Fine-tuning is recommended** for production use - delivers 10-18% gains
+- **GPT-5 series outperforms GPT-4o** by 5-15% on stance tasks
+- **Always use Few Shot prompts** for base models - 2-8% better than other variants
+- **Avoid "With Definitions" prompts** - consistently worst performer
+- **Current stance is easier** than future stance by 4-9% across all models
+- **Merging unclear/irrelevant** improves stance metrics by 5-10%
 
 ## Fine-Tuning Pipeline
 
 **Location**: `src/Traction/train_eval/`
 
-A modular pipeline for fine-tuning GPT-5-mini on monetary/fiscal stance classification using supervised fine-tuning (SFT).
+A modular pipeline for fine-tuning GPT-4.1-mini on monetary/fiscal stance and agreement classification using supervised fine-tuning (SFT).
 
 ### Quick Start
 
@@ -497,14 +520,19 @@ python run_pipeline.py
 ### Pipeline Modules
 
 1. **`training_config.py`**: Configuration (paths, hyperparameters, model settings)
+   - Supports all four task types: `monetary_stance`, `fiscal_stance`, `monetary_agreement`, `fiscal_agreement`
+   - Base model: `gpt-4.1-mini-2025-04-14` (GPT-4.1 series, April 2025)
+   - Task-specific Excel column mappings and label definitions
 2. **`training_utils.py`**: Shared utilities (logging, API client, file I/O)
 3. **`prepare_data.py`**: Convert Excel → OpenAI JSONL format
 4. **`finetune.py`**: Upload data & manage fine-tuning jobs
 5. **`evaluate.py`**: Calculate metrics & generate reports
-6. **`run_pipeline.py`**: End-to-end orchestrator
+6. **`evaluate_fiscal_monetray_pipeline.py`**: Comprehensive evaluation script for comparing prompts and models
+7. **`run_pipeline.py`**: End-to-end orchestrator
 
 ### Key Features
 
+- **Multi-task support**: All four task types (monetary/fiscal × stance/agreement)
 - **Dual examples**: Generates 2 examples per row (staff + authority texts) → ~2x training data
 - **All labels included**: "unclear" and "irrelevant" are valid targets (not filtered)
 - **Structured output**: JSON responses validated against Pydantic schemas
@@ -514,27 +542,37 @@ python run_pipeline.py
 
 ### Expected Performance
 
-- **Baseline (GPT-5-mini + few_shot)**: 65.40% stance accuracy (monetary)
-- **Fine-tuned GPT-4.1-mini achieved**:
-  - **Current stance**: 82.76% accuracy (combined), 78.45% (standard)
-  - **Future stance**: 77.59% accuracy (combined), 73.28% (standard)
-  - **Performance gain**: +13-17% absolute improvement over baseline
-- **Training time**: 10-40 minutes
-- **Cost**: ~$0.50-2.00 per fine-tuning run (pricing subject to change)
+Based on comprehensive evaluation (`src/Traction/docs/evaluation_results_comprehensive_current.md`):
+
+**GPT-4.1 Fine-tuned Performance:**
+| Task | Metric | Value |
+|------|--------|-------|
+| Monetary Agreement | Accuracy | **77.59%** |
+| Monetary Stance (Current) | Accuracy | **83.62%** |
+| Monetary Stance (Future) | Accuracy | **74.14%** |
+| Fiscal Agreement | Accuracy | **80.00%** |
+| Fiscal Stance | Accuracy | **74.17%** |
+
+**Performance gain over baseline GPT-5-mini**: +10-18% absolute improvement
 
 ### Usage Examples
 
 ```bash
 # Step-by-step execution
 python prepare_data.py          # Generate train.jsonl, test.jsonl
-python finetune.py              # Fine-tune model (10-40 min)
+python finetune.py              # Fine-tune model
 python evaluate.py              # Generate evaluation_report.md
 
-# Custom hyperparameters
-python finetune.py --n-epochs 5 --learning-rate-multiplier 1.5
+# Comprehensive evaluation across models and prompts
+python evaluate_fiscal_monetray_pipeline.py
 
-# Resume from checkpoint
-python run_pipeline.py --skip-prepare --skip-finetune --model-id ft:gpt-5-mini:xxx
+# In Python:
+from evaluate_fiscal_monetray_pipeline import run_comprehensive_evaluation
+df = run_comprehensive_evaluation(
+    domains=['monetary', 'fiscal'],
+    models=['gpt-4o-2024-08-06', 'gpt-5-2025-08-07'],
+    variants=['simple', 'few_shot', 'chain_of_thought']
+)
 ```
 
 ### Output Files
@@ -550,31 +588,38 @@ See `src/Traction/train_eval/README.md` for complete documentation.
 
 ### Quick Evaluation Summary
 
-**Latest Replication Results** (`src/Traction/evaluation_results_replication.md`):
+**Latest Comprehensive Results** (`src/Traction/docs/evaluation_results_comprehensive_current.md`):
 
-**Monetary Domain:**
-- **Agreement**: GPT-4o + Simple Short performs best (Accuracy: **0.7370**, F1: **0.7132**)
-- **Stance (Raw Results)**:
-  - Current: GPT-4o + Few-shot (Accuracy: **0.6419**, F1: **0.6309**)
-  - Future: GPT-4o + Simple (Accuracy: **0.6678**, F1: **0.6547**)
-- **Stance (Merging Unclear/Irrelevant)**:
-  - Current: GPT-4o + Few-shot (Accuracy: **0.7007**, F1: **0.7165**)
-  - Future: GPT-4o + Simple (Accuracy: **0.7042**, F1: **0.6998**)
+**Best Model Performance by Task:**
 
-**Fiscal Domain:**
-- **Agreement**: GPT-4o + Chain of Thought performs best (Accuracy: **0.7000**, F1: **0.6520**)
-- **Stance (Raw Results)**: GPT-4o + Chain of Thought performs best (Accuracy: **0.6567**, F1: **0.6565**)
-- **Stance (Merging Unclear/Irrelevant)**: GPT-4o + Simple performs best (Accuracy: **0.7783**, F1: **0.7610**)
+| Task | Best Model | Accuracy | Notes |
+|------|-----------|----------|-------|
+| Monetary Agreement | GPT-4.1 Fine-tuned | **77.59%** | Simple prompt |
+| Monetary Stance (Current) | GPT-4.1 Fine-tuned | **83.62%** | Simple prompt |
+| Monetary Stance (Future) | GPT-4.1 Fine-tuned | **74.14%** | Simple prompt |
+| Fiscal Agreement | GPT-4.1 Fine-tuned | **80.00%** | Simple prompt |
+| Fiscal Stance | GPT-4.1 Fine-tuned | **74.17%** | Simple prompt |
+
+**Model Comparison (best results per model):**
+
+| Model | Monetary Agreement | Monetary Stance | Fiscal Agreement | Fiscal Stance |
+|-------|-------------------|-----------------|------------------|---------------|
+| GPT-4.1 Fine-tuned | 77.59% | 83.62%/74.14% | 80.00% | 74.17% |
+| GPT-5 | 74.05% (Few-shot) | 79.41%/69.55% | 72.33% | 69.50% |
+| GPT-5-mini | 71.63% | 67.47%/67.82% | 70.00% | 68.17% |
+| GPT-4o | 73.70% | 64.19%/66.78% | 70.00% | 65.67% |
 
 **Key Insights:**
-- GPT-4o consistently outperforms GPT-4o-mini and GPT-3.5-turbo across all tasks
-- Optimal prompt strategy varies by domain and task
-- Monetary agreement: Simple Short prompts work best
-- Fiscal tasks: Chain of Thought (agreement/stance raw) or Simple (stance merged) work best
-- Merging unclear/irrelevant labels significantly improves stance accuracy (5-10% boost)
+- **Fine-tuning delivers significant gains**: GPT-4.1 fine-tuned consistently outperforms all base models
+- **GPT-5 > GPT-5-mini > GPT-4o** for base model performance
+- **Few-shot prompts** work best for GPT-5 series
+- **Merging unclear/irrelevant labels** improves stance accuracy by 5-10%
+- Current stance prediction is 4-9% easier than future stance across all models
 
-For original evaluation results, see:
-- `src/Traction/temp/temp_eval.md` - Earlier GPT-4o evaluation with different prompt strategies
+**Documentation locations:**
+- `src/Traction/docs/evaluation_results_comprehensive_current.md` - Full comparison table
+- `src/Traction/docs/evaluation_results_replication.md` - Replication study details
+- `src/Traction/docs/evaluation_metrics_gpt_5.md` - GPT-5 specific metrics
 
 ## Quick Reference: Common Workflows
 
@@ -632,11 +677,20 @@ python src/Traction/inference_agreement_stance.py agreement \
 ### Evaluation & Fine-Tuning
 
 ```bash
-# Evaluate prompts and models
-jupyter notebook notebooks/Traction/evaluate_fiscal_monetray_pipeline.ipynb
+# Run comprehensive evaluation across models and prompts
+cd src/Traction/train_eval
+python evaluate_fiscal_monetray_pipeline.py
+
+# In Python - run batch evaluation
+from evaluate_fiscal_monetray_pipeline import run_comprehensive_evaluation
+df = run_comprehensive_evaluation(
+    domains=['monetary', 'fiscal'],
+    models=['gpt-4o-2024-08-06', 'gpt-5-2025-08-07'],
+    variants=['simple', 'few_shot', 'chain_of_thought'],
+    save_results=True
+)
 
 # Run fine-tuning pipeline
-cd src/Traction/train_eval
 python run_pipeline.py
 
 # Step-by-step fine-tuning
@@ -645,7 +699,7 @@ python finetune.py
 python evaluate.py
 
 # Resume from existing fine-tuned model
-python evaluate.py --model-id ft:gpt-5-mini:xxx
+python evaluate.py --model-id ft:gpt-4.1-mini:xxx
 ```
 
 ### Visualization Workflows
@@ -678,6 +732,11 @@ share = compute_imf_vs_authority_share(wide, imf_col='imf_staff_stance_current',
                                         auth_col='country_authority_stance_current')
 plot_stacked_proportions_by_year(share)
 ```
+
+**Recommended notebooks for analysis:**
+- `src/Traction/post_estimate_analysis/data_vis_v4.ipynb`: Latest comprehensive analysis
+- `src/Traction/post_estimate_analysis/compare_old_new_pipeline.ipynb`: Compare pipeline versions
+- `src/Traction/post_estimate_analysis/results_data_transformation.ipynb`: Data transformation utilities
 
 ## Troubleshooting
 
