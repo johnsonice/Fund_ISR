@@ -43,6 +43,13 @@
     * Split paragraphs into **staff views** (`paragraphs_sr`) and **authorities’ views** (`paragraphs_av`) according to the rule.
     * Flag entries as `av_uncertain` when using the fallback split method (rule 2).
 
+- Meaning of paragraph type labels:
+    * `staff` = paragraphs from `paragraphs_sa`, i.e., the **Staff Appraisal** section only.
+    * `buff` = paragraphs from `paragraphs_bu`, i.e., the separate **BUFF / authorities statement** document, usually identified by titles such as “Statement by” or “Statement on”.
+    * `staff_a` = paragraphs from `paragraphs_sr`, i.e., additional **staff report** text extracted from the main report before the Staff Appraisal section. This is staff narrative outside the formal Staff Appraisal.
+    * `buff_a` = paragraphs from `paragraphs_av`, i.e., **Authorities' Views** paragraphs embedded inside the main staff report, not the separate BUFF statement file.
+    * In short: `staff` and `buff` are the main standalone staff/authority outputs used by the pipeline, while `staff_a` and `buff_a` are additional paragraphs split from the main report for broader analysis.
+
 - Merge text data with all fundmental data 
 
 - Identify topics for each paragraphs:
@@ -51,8 +58,8 @@
         * Expand each paragraph list into a long-form DataFrame with one row per paragraph, tagged by `Print ISBN` and a `type` label:
         * `'buff'` → `paragraphs_bu`
         * `'staff'` → `paragraphs_sa`
-        * `'buff_a'` → `paragraphs_av` (authorities’ views)
-        * `'staff_a'` → `paragraphs_sr` (staff views)
+        * `'buff_a'` → `paragraphs_av` (Authorities' Views inside the main report)
+        * `'staff_a'` → `paragraphs_sr` (other staff-report text before Staff Appraisal)
         * Concatenate all paragraph rows into a single DataFrame.
         * Remove exact duplicate rows.
         * Flag rows with NaN or very short text (≤ 100 characters) in a `to_drop` column.
