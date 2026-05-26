@@ -91,8 +91,26 @@ Do **not** assume that the derived `Primary Country Code` column alone is enough
 ### Step 3
 Run `03_incremental_aiv_update.py` using the **clean filtered metadata workbook** produced after QA.
 
+If there are multiple years or multiple yearly XML roots in the run, execute step 03 for each yearly input as needed, then append the resulting yearly outputs into final combined incremental files.
+
+Required final combined outputs when multiple years are processed:
+- one combined `df_aiv_incremental.csv`
+- one combined `df_paragraphs_incremental.csv`
+
+The combined files should include all rows from the yearly step 03 outputs that belong in the final incremental run.
+
+Suggested naming for the final combined output folder:
+- `<run_name_1>_<run_name_2>_...`
+- or a clear aggregate folder such as `validation_chain_<combined_run_name>`
+
+Inside that final combined folder, save:
+- `df_aiv_incremental.csv`
+- `df_paragraphs_incremental.csv`
+
 ### Steps 4-7
 Continue the downstream incremental pipeline only after step 03 succeeds.
+
+If multiple years were processed, continue downstream steps from the **combined** `df_aiv_incremental.csv` and **combined** `df_paragraphs_incremental.csv`, not from a single-year output only.
 
 ## Agent operating rule
 
@@ -104,7 +122,8 @@ When executing this pipeline, the agent should follow this rule:
 4. Verify filtered metadata country matching on the resulting QA input file (the combined file if multiple yearly files exist, otherwise the single filtered file).
 5. Create a clean metadata workbook for step 03.
 6. Run step 03 using the clean metadata workbook.
-7. Continue to later steps only after step 03 output looks valid.
+7. If multiple years were processed, append the yearly `df_aiv_incremental.csv` files into one combined `df_aiv_incremental.csv`, and append the yearly `df_paragraphs_incremental.csv` files into one combined `df_paragraphs_incremental.csv`.
+8. Continue to later steps only after the final combined output looks valid.
 
 ## Stop conditions
 
