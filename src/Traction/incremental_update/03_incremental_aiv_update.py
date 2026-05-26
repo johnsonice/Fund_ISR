@@ -21,7 +21,7 @@ DEFAULT_RAW_XML_ROOT = Path(
     r"C:\Users\chuang\OneDrive - International Monetary Fund (PRD)\AI tools\Data\ArticleIV_xml_updated\05252026_update"
 )
 DEFAULT_METADATA_PATH = Path(
-    r"C:\Users\chuang\OneDrive - International Monetary Fund (PRD)\Faltermeier, Julia's files - FIP Traction of IMF surveillance\data\aiv\IMF_Main_MetaData_20260525_filtered.xlsx"
+    r"C:\Users\chuang\OneDrive - International Monetary Fund (PRD)\Faltermeier, Julia's files - FIP Traction of IMF surveillance\temp\data\output\incremental_update\05252026_update\IMF_Main_MetaData_20260525_filtered.xlsx"
 )
 DEFAULT_OUTPUT_DIR = config.output_dir / "incremental_update" / DEFAULT_RAW_XML_ROOT.name
 

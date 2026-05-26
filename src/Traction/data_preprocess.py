@@ -288,8 +288,7 @@ def doc_to_paragraphs(df_doc):
     # --- drop NaN or short paragraphs ---
     df_paragraphs = df_paragraphs.dropna(subset=['text'])
     df_paragraphs['to_drop'] = df_paragraphs['text'].str.len().le(100)
-    # if you want to actually remove them:
-    # df_paragraphs = df_paragraphs.loc[~df_paragraphs['to_drop']]
+    df_paragraphs = df_paragraphs.loc[~df_paragraphs['to_drop']]
     # --- deduplicate ---
     df_paragraphs = df_paragraphs.drop_duplicates(subset=['Print ISBN', 'text', 'type'])
     # --- fix av_uncertain for non-_a types ---
