@@ -251,10 +251,10 @@ def parse_args(argv=None):
                         help='Prompt file name')
     parser.add_argument('--output_file', type=str, default='paragraph_with_sector_batch.csv',
                         help='Post-processed CSV output file name')
-    parser.add_argument('--model', type=str, default='gpt-5-nano',
-                        help='OpenAI model to use (default: gpt-5-nano)')
+    parser.add_argument('--model', type=str, default='gpt-5.4-mini',
+                        help='OpenAI model to use (default: gpt-5.4-mini)')
     parser.add_argument('--temperature', type=float, default=1.0,
-                        help='Model temperature (default: 1.0) for GPT-5-nano')
+                        help='Model temperature (default: 1.0)')
     parser.add_argument('--max-input-length', type=int, default=2000,
                         help='Maximum input text length (default: 2000)')
     parser.add_argument('--endpoint', type=str, default='/v1/chat/completions',
@@ -274,7 +274,7 @@ def parse_args(argv=None):
 
 #%%
 if __name__ == "__main__":
-    args = parse_args(['--test-mode', '--sample-size', '1000','--create-batch','--submit','--post-process'])
+    args = parse_args(sys.argv[1:] if len(sys.argv) > 1 else ['--test-mode', '--sample-size', '1000','--create-batch','--submit','--post-process'])
     print(args)
     data_dir = Path(args.data_dir)
     results_dir = Path(args.output_dir)
