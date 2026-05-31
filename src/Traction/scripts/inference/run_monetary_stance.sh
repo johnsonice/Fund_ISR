@@ -1,7 +1,7 @@
 # Run monetary stance inference (test-mode) with the chosen prompt variant.
 cd /data/home/xiong/dev/Fund_ISR/src/Traction/
 eval "$(conda shell.bash hook)" && conda activate traction
-PROMPT_VARIANT=${PROMPT_VARIANT:-few_shot}
+PROMPT_VARIANT=${PROMPT_VARIANT:-simple}
 
 python inference_agreement_stance.py stance \
   --domain monetary \

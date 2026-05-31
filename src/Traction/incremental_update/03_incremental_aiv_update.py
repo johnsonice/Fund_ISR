@@ -253,6 +253,39 @@ def build_incremental_doc_df(
     return extraction_df
 
 
+def _join_paragraphs(value: Any) -> str:
+    if isinstance(value, list):
+        return "\n".join(value)
+    return ""
+
+
+def build_documents_df(df_doc: pd.DataFrame) -> pd.DataFrame:
+    """Produce a legacy-schema per-document rollup matching reference df_documents.csv.
+
+    Joins paragraph lists into single staff/buff text blobs so the output can be
+    row-bound with the historical df_documents.csv and fed to the legacy
+    zero-shot general sentiment script (9.llm_general.py).
+    """
+    rows = []
+    for _, r in df_doc.iterrows():
+        staff = _join_paragraphs(r.get("paragraphs_sr")) + "\n" + _join_paragraphs(r.get("paragraphs_sa"))
+        buff = _join_paragraphs(r.get("paragraphs_av")) + "\n" + _join_paragraphs(r.get("paragraphs_bu"))
+        country = r.get("Primary Country Description")
+        if not isinstance(country, str) or country == "":
+            country = r.get("countries")
+        rows.append(
+            {
+                "Print ISBN": r["Print ISBN"],
+                "staff": staff,
+                "buff": buff,
+                "country": country,
+                "year": r.get("Year from title"),
+                "publication_date": r.get("Publication Date"),
+            }
+        )
+    return pd.DataFrame(rows).reset_index()
+
+
 def write_summary(
     output_path: Path,
     raw_xml_root: Path,
@@ -264,6 +297,7 @@ def write_summary(
     unmatched_in_metadata: list[str],
     df_doc: pd.DataFrame,
     df_paragraphs: pd.DataFrame,
+    df_documents: pd.DataFrame,
 ) -> None:
     summary = {
         "raw_xml_root": str(raw_xml_root),
@@ -275,6 +309,7 @@ def write_summary(
         "unmatched_in_metadata": unmatched_in_metadata,
         "document_rows": int(len(df_doc)),
         "paragraph_rows": int(len(df_paragraphs)),
+        "documents_rows": int(len(df_documents)),
         "staff_verified_count": int(df_doc["staff_verified"].sum()) if "staff_verified" in df_doc.columns else 0,
         "buff_verified_count": int(df_doc["buff_verified"].sum()) if "buff_verified" in df_doc.columns else 0,
         "metadata_matched_count": int(df_doc["metadata_matched"].sum()) if "metadata_matched" in df_doc.columns else 0,
@@ -348,6 +383,10 @@ def main(argv: list[str] | None = None) -> None:
     doc_output_path = output_dir / "df_aiv_incremental.csv"
     _write_csv(df_doc, doc_output_path)
 
+    df_documents = build_documents_df(df_doc)
+    documents_output_path = output_dir / "df_documents_incremental.csv"
+    _write_csv(df_documents, documents_output_path)
+
     df_doc_reload = pd.read_csv(doc_output_path)
     df_paragraphs = doc_to_paragraphs(df_doc_reload)
     paragraph_output_path = output_dir / "df_paragraphs_incremental.csv"
@@ -367,11 +406,13 @@ def main(argv: list[str] | None = None) -> None:
         unmatched_in_metadata=unmatched_in_metadata,
         df_doc=df_doc,
         df_paragraphs=df_paragraphs,
+        df_documents=df_documents,
     )
 
     print(f"Discovered package folders: {len(folder_dict_all)}")
     print(f"Selected package folders: {len(selected_folder_dict)}")
     print(f"Wrote document-level incremental data to {doc_output_path}")
+    print(f"Wrote per-document text rollup to {documents_output_path}")
     print(f"Wrote paragraph-level incremental data to {paragraph_output_path}")
     print(f"Wrote summary to {output_dir / 'incremental_summary.json'}")
 

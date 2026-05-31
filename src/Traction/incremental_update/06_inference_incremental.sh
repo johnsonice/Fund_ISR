@@ -10,7 +10,7 @@ eval "$(conda shell.bash hook 2>/dev/null)" && conda activate traction 2>/dev/nu
 
 INCREMENTAL_DIR="/data/home/xiong/data/Fund/CSR/Tractions/output/incremental_update/05252026_update"
 DATA_FILE="${INCREMENTAL_DIR}/document_by_type_sector_incremental.csv"
-PROMPT_VARIANT=${PROMPT_VARIANT:-few_shot}
+PROMPT_VARIANT=${PROMPT_VARIANT:-simple}
 
 echo "=== Monetary Agreement ==="
 python inference_agreement_stance.py agreement \

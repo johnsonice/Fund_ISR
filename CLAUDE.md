@@ -8,9 +8,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - [x] Experiment fine-tuned pipeline with the formalized prompts for both monetary and fiscal domains
 - [x] Comprehensive evaluation across GPT-4o, GPT-5, GPT-5-mini, and GPT-4.1 fine-tuned models
 - [x] Modular fine-tuning pipeline supporting all four task types (monetary/fiscal stance/agreement)
+- [x] Incremental data update pipeline for extending analysis to new Article IV reports
+- [x] Production inference scripts with fine-tuned GPT-4.1 models (simple prompts as default)
 
 **To Do:**
-- [ ] Extend data range to current (2025-2026 Article IV reports)
 - [ ] Explore training strategies beyond SFT (e.g., RFT, RLHF)
 
 ## Environment Setup
@@ -121,23 +122,35 @@ python src/Traction/inference_agreement_stance.py stance \
 After running stance/agreement inference, use these tools for analysis:
 
 **Key modules:**
-- `data_vis_utils.py`: Reusable visualization utilities (sector-agnostic design)
-- `data_vis.ipynb`: Interactive analysis notebook with comprehensive charts
+- `data_vis_utils.py`: Reusable visualization utilities (sector-agnostic design, no country classification logic)
+- `results_data_transformation.ipynb`: Authoritative reference for data transformation from raw inference outputs to final analysis-ready dataset (`df_fin.csv`)
+- `data_vis_v4.ipynb`: Latest comprehensive analysis notebook
+
+**Income group classification:**
+- Country metadata is maintained in `src/Traction/docs/reference/country_meta_info.xlsx`
+- Income groups are assigned via DataFrame merge on ISO3 codes (not hardcoded functions)
+- Pattern: `df = df.merge(country_map, left_on='Primary Country Code', right_on='ISO3', how='left')`
 
 **Key capabilities:**
-1. **Income group classification**: Auto-classify countries into AE (advanced economies), EM (emerging markets), LC/LIC (low-income)
-2. **Agreement analysis**:
+1. **Agreement analysis**:
    - Compute "no disagreement" proportions by year and income group
    - Trend analysis of disagreement areas (e.g., inflation targets, interest rate timing)
    - Category extraction from disagreement text fields
-3. **Stance analysis**:
+2. **Stance analysis**:
    - Pivot stance data to wide format (IMF vs authority comparison)
    - Compute stance direction scores (loosening/tightening scale)
    - Stacked proportion charts showing IMF advice vs authority policy direction
+3. **Data transformation** (`results_data_transformation.ipynb`):
+   - Pivots long-format stance data to wide format (staff vs authority side-by-side)
+   - Derives combined agreement measures (`mon_agreement_general`, `fis_agreement_general`) from multiple sources
+   - Creates 9-category policy mix (monetary x fiscal combinations: MtFt, MnFt, etc.)
+   - Cleans hallucinated LLM values and consolidates unclear/no-change stance values
+   - Outputs: `df_fin.csv` (final dataset with 41 columns ready for statistical analysis)
 4. **Report counting**: Track Article IV report volumes by year and income group
 
 **Example usage (in notebook):**
 ```python
+import pandas as pd
 from data_vis_utils import (
     filter_year_range,
     add_no_disagreement_flag,
@@ -148,17 +161,85 @@ from data_vis_utils import (
     plot_stacked_proportions_by_year
 )
 
-# Load results
+# Load results and country metadata
 df = pd.read_csv('agreement_monetary_results.csv')
-
-# Add income groups
-df['income_group'] = df['country'].apply(classify_income_group_from_country_name)
+country_map = pd.read_excel('src/Traction/docs/reference/country_meta_info.xlsx')
+df = df.merge(country_map[['ISO3', 'income_group']], left_on='Primary Country Code', right_on='ISO3', how='left')
 
 # Compute and plot agreement trends
 df = add_no_disagreement_flag(df, agreement_col='agreement')
 proportions = compute_no_disagreement_proportions_by_year(df, groups=['ALL', 'AE', 'EM', 'LIC'])
 plot_group_lines_by_year(proportions, groups=['ALL', 'AE', 'EM', 'LIC'])
 ```
+
+### Incremental Data Update Pipeline
+
+**Location**: `src/Traction/incremental_update/`
+
+A 7-step pipeline for processing new Article IV reports and merging them into the existing dataset:
+
+```bash
+# Step 1: Extract metadata from new XML packages
+python src/Traction/incremental_update/01_data_preprocess_incremental.py \
+  --input-root /path/to/new_xml_packages --output-path /path/to/raw_metadata.xlsx
+
+# Step 2: Postprocess metadata (enrich with country codes, year, AIV flag)
+python src/Traction/incremental_update/02_meta_data_postprocess.py \
+  --input-path /path/to/raw_metadata.xlsx --output-path /path/to/postprocessed.xlsx
+
+# ⚠ MANDATORY QA GATE: Verify country matching before proceeding
+# - Check Country Name extraction from titles
+# - Verify Primary Country Code ISO3 matches
+# - Create clean metadata workbook with corrections
+
+# Step 3: Extract texts and paragraphs from XML
+python src/Traction/incremental_update/03_incremental_aiv_update.py \
+  --raw-xml-root /path/to/xml --metadata-path /path/to/clean_metadata.xlsx \
+  --output-dir /path/to/incremental_output
+
+# Step 4: Classify topics (Batch API)
+bash src/Traction/incremental_update/04_topic_identification_incremental.sh
+
+# Step 5: Aggregate paragraphs to document level
+bash src/Traction/incremental_update/05_paragraph_back2_doc_incremental.sh
+
+# Step 6: Run all 4 stance/agreement inference jobs (uses fine-tuned models)
+bash src/Traction/incremental_update/06_inference_incremental.sh
+
+# Step 7: Merge incremental results with main dataset
+python src/Traction/incremental_update/07_merge_all_incremental.py \
+  --incremental-dir /path/to/incremental --main-dir /path/to/main
+```
+
+**Key features:**
+- Mandatory QA gate after Step 2 for country matching verification
+- Uses fine-tuned GPT-4.1 models with `simple` prompt variant for inference
+- Deduplicates by Print ISBN when merging with main dataset
+- Original main files are never modified; merged outputs written to incremental directory
+- Supports multi-year processing (run Step 3 per year, combine, then continue)
+- Detailed workflow documentation: `src/Traction/incremental_update/incremental_update_step.md`
+
+### Inference Shell Scripts
+
+**Location**: `src/Traction/scripts/inference/`
+
+Modular shell scripts for running inference tasks:
+
+```
+scripts/inference/
+├── run_all.sh                  # Runs all 4 tasks in parallel
+├── run_monetary_agreement.sh   # Monetary agreement only
+├── run_fiscal_agreement.sh     # Fiscal agreement only
+├── run_monetary_stance.sh      # Monetary stance only
+└── run_fiscal_stance.sh        # Fiscal stance only
+```
+
+- Default prompt variant: `simple` (optimized for fine-tuned models)
+- Override via environment variable: `PROMPT_VARIANT=few_shot bash run_all.sh`
+- Uses fine-tuned GPT-4.1 model IDs configured per task
+
+**Training scripts**: `src/Traction/scripts/training/`
+- `prepare_all_tasks.sh`, `finetune_all_tasks.sh`, `evaluate_all_tasks.sh`, `evaluate_single.sh`
 
 ### Evaluation & Development
 
@@ -205,16 +286,32 @@ plot_group_lines_by_year(proportions, groups=['ALL', 'AE', 'EM', 'LIC'])
     - `prompts/prompt_examples.py`: Task-specific examples, explanations, and column mappings
     - `prompts/*.md`: Markdown prompt templates (4 variants per task)
   - **Post-estimation analysis:**
-    - `post_estimate_analysis/data_vis_utils.py`: Visualization utilities (sector-agnostic)
+    - `post_estimate_analysis/data_vis_utils.py`: Visualization utilities (sector-agnostic, no country classification logic)
+    - `post_estimate_analysis/results_data_transformation.ipynb`: Authoritative data transformation notebook (raw inference → `df_fin.csv`)
     - `post_estimate_analysis/data_vis_v4.ipynb`: Latest analysis notebook
     - `post_estimate_analysis/compare_old_new_pipeline.ipynb`: Pipeline comparison
+    - `post_estimate_analysis/v1/`: Archived legacy notebooks (data_vis.ipynb, data_vis_v3.ipynb)
+  - **Incremental update pipeline:**
+    - `incremental_update/01_data_preprocess_incremental.py`: Extract metadata from new XML packages
+    - `incremental_update/02_meta_data_postprocess.py`: Enrich metadata with country codes and AIV flag
+    - `incremental_update/03_incremental_aiv_update.py`: Extract texts and paragraphs from XML
+    - `incremental_update/04_topic_identification_incremental.sh`: Topic classification (Batch API)
+    - `incremental_update/05_paragraph_back2_doc_incremental.sh`: Aggregate to document level
+    - `incremental_update/06_inference_incremental.sh`: Run 4 stance/agreement inference jobs
+    - `incremental_update/07_merge_all_incremental.py`: Merge with main dataset (dedup by Print ISBN)
+    - `incremental_update/incremental_update_step.md`: Detailed workflow documentation
+  - **Shell scripts:**
+    - `scripts/inference/`: Modular inference scripts (run_all.sh, per-task scripts)
+    - `scripts/training/`: Fine-tuning scripts (prepare, finetune, evaluate)
+    - `scripts/run_post_process_all.sh`: Batch post-processing
   - **Fine-tuning & evaluation pipeline:**
     - `train_eval/`: Fine-tuning pipeline for GPT-4.1-mini (see Fine-Tuning section)
     - `train_eval/evaluate_fiscal_monetray_pipeline.py`: Comprehensive model/prompt evaluation
-  - **Documentation:**
+  - **Documentation & reference:**
     - `docs/evaluation_results_comprehensive_current.md`: Latest evaluation results
     - `docs/evaluation_results_replication.md`: Replication study
     - `docs/Data_Process_Documentation.md`: Data processing documentation
+    - `docs/reference/country_meta_info.xlsx`: Country ISO3 codes and income group reference
   - **Legacy & reference code:**
     - `temp/reference_code/`: Legacy scripts from earlier pipeline iterations (1-13 numbered scripts)
     - `temp/`: Temporary scripts and backups
@@ -292,7 +389,7 @@ Unified production script with modular design:
 - **Prompt templates**: Markdown files with 4 variants per task
   - `simple`: Minimal instructions
   - `with_definitions`: Adds detailed category definitions
-  - `few_shot`: Includes labeled examples (RECOMMENDED)
+  - `few_shot`: Includes labeled examples (recommended for base models)
   - `chain_of_thought`: Adds reasoning step
 - **PROMPT_REGISTRY**: Maps prompt keys to files/models
   - Pattern: `{domain}_{task}_{variant}` (e.g., `monetary_stance_few_shot`)
@@ -304,17 +401,25 @@ Unified production script with modular design:
 
 **8. Post-Estimation Analysis (`src/Traction/post_estimate_analysis/`):**
 - **`data_vis_utils.py`**: Production-ready visualization utilities
-  - **Income group classification**: `classify_income_group_from_country_name()`, `classify_income_group_from_code()`
   - **DataFrame utilities**: `filter_year_range()`, `coerce_year_int()`, `compute_year_group_counts()`
   - **Agreement analysis**: `add_no_disagreement_flag()`, `compute_no_disagreement_proportions_by_year()`, `extract_categories_from_text()`
   - **Stance analysis**: `pivot_stance_wide()`, `compute_imf_vs_authority_share()`
   - **Plotting helpers**: `plot_group_lines_by_year()`, `plot_stacked_proportions_by_year()`, `plot_category_trends()`
   - **Design philosophy**: Sector-agnostic, composable functions that return data (not side effects)
+  - **Note**: Income group classification removed from this module; now done via external reference file merge
+- **Country reference**: `docs/reference/country_meta_info.xlsx` — ISO3 codes and income group mappings
 - **Notebooks:**
+  - `results_data_transformation.ipynb`: Authoritative data transformation pipeline (raw inference → `df_fin.csv` with 41 columns)
   - `data_vis_v4.ipynb`: Latest comprehensive analysis notebook (current version)
-  - `data_vis_v3.ipynb`: Previous version of analysis notebook
   - `compare_old_new_pipeline.ipynb`: Comparison between old and new pipeline results
-  - `results_data_transformation.ipynb`: Data transformation utilities for results
+  - `v1/`: Archived legacy notebooks (data_vis.ipynb, data_vis_v3.ipynb)
+
+**9. Incremental Update Pipeline (`src/Traction/incremental_update/`):**
+- 7-step pipeline for processing new Article IV reports and merging with existing data
+- Steps: XML metadata extraction → postprocessing → QA gate → text extraction → topic classification → aggregation → inference → merge
+- Uses fine-tuned GPT-4.1 models with `simple` prompts for inference
+- Deduplicates by Print ISBN when merging; original main files never modified
+- See Incremental Data Update Pipeline section for full details
 
 ### Topic Classification System
 
@@ -362,6 +467,9 @@ External data structure (configured in `config.py`):
 ├── text_collection/
 │   └── IMF_Main_MetaData_*.xlsx  # Document metadata
 └── output/                  # Generated outputs (auto-created)
+    ├── *.csv                # Main pipeline outputs
+    └── incremental_update/  # Incremental update outputs
+        └── {run_name}/      # Per-run directory (e.g., 05252026_update)
 ```
 
 ### Output Files
@@ -392,8 +500,9 @@ External data structure (configured in `config.py`):
     - Columns: id, Print ISBN, topic, country, year, TEXT_AUTHOR, text, stance_current, stance_future
   - `stance_fiscal_results.csv`: Fiscal stance classifications
 
-**Post-analysis outputs (from data_vis.ipynb):**
-- Income group enhanced datasets
+**Post-analysis outputs (from results_data_transformation.ipynb and data_vis_v4.ipynb):**
+- `df_fin.csv`: Final analysis-ready dataset (41 columns including combined agreement measures, policy mix, stance coding)
+- Income group enhanced datasets (via `docs/reference/country_meta_info.xlsx` merge)
 - Year-over-year trend tables
 - Disagreement category analysis tables
 
@@ -441,7 +550,8 @@ The repository implements a complete pipeline from raw XML to publication-ready 
 ├─────────────────────────────────────────────────────────────────────────┤
 │ Input:  agreement/stance results CSVs                                   │
 │ Tools:  post_estimate_analysis/data_vis_utils.py                        │
-│         post_estimate_analysis/data_vis.ipynb                           │
+│         post_estimate_analysis/results_data_transformation.ipynb        │
+│         post_estimate_analysis/data_vis_v4.ipynb                        │
 │ Output: - Income group classifications                                  │
 │         - Agreement trend charts                                        │
 │         - Stance comparison charts (IMF vs authorities)                 │
@@ -452,8 +562,8 @@ The repository implements a complete pipeline from raw XML to publication-ready 
 
 **Key decision points:**
 - **Async vs Batch API**: Use async for <5K rows, batch API for larger datasets
-- **Prompt variant**: Use `few_shot` (recommended) or fine-tuned models for production
-- **Model selection**: `gpt-5-mini` (default), `gpt-5` (premium), or fine-tuned `gpt-5-mini`
+- **Prompt variant**: Use `simple` for fine-tuned models (default), `few_shot` for base models
+- **Model selection**: Fine-tuned GPT-4.1 (production default), `gpt-5` (premium zero-shot), `gpt-5-mini` (cost-effective zero-shot)
 
 ### Key Design Patterns
 
@@ -493,10 +603,17 @@ Based on comprehensive evaluation results (`src/Traction/docs/evaluation_results
 - `gpt-5-2025-08-07` - Best zero-shot performance (August 2025)
 - `gpt-4o-2024-08-06` - Legacy comparison baseline
 
+**Fine-tuned Model IDs (production):**
+- Monetary Agreement: `ft:gpt-4.1-2025-04-14:protagolabs:monetary-agreement:D2McIjCy`
+- Fiscal Agreement: `ft:gpt-4.1-2025-04-14:protagolabs:fiscal-agreement:D2O1nc5q`
+- Monetary Stance: `ft:gpt-4.1-2025-04-14:protagolabs:monetary-stance:D2K6qCDj`
+- Fiscal Stance: `ft:gpt-4.1-2025-04-14:protagolabs:fiscal-stance:D2Lw2NJZ`
+
 **Key Findings:**
 - **Fine-tuning is recommended** for production use - delivers 10-18% gains
+- **Use `simple` prompts** with fine-tuned models (default in all inference scripts)
+- **Use `few_shot` prompts** with base models - 2-8% better than other variants
 - **GPT-5 series outperforms GPT-4o** by 5-15% on stance tasks
-- **Always use Few Shot prompts** for base models - 2-8% better than other variants
 - **Avoid "With Definitions" prompts** - consistently worst performer
 - **Current stance is easier** than future stance by 4-9% across all models
 - **Merging unclear/irrelevant** improves stance metrics by 5-10%
@@ -643,8 +760,11 @@ python src/Traction/inference_agreement_stance.py agreement \
 python src/Traction/inference_agreement_stance.py stance \
   --domain fiscal --submit --post-process
 
-# 5. Analyze results (interactive)
-jupyter notebook src/Traction/post_estimate_analysis/data_vis.ipynb
+# 5. Transform results into final dataset
+jupyter notebook src/Traction/post_estimate_analysis/results_data_transformation.ipynb
+
+# 6. Analyze and visualize results
+jupyter notebook src/Traction/post_estimate_analysis/data_vis_v4.ipynb
 ```
 
 ### Common Inference Patterns
@@ -709,11 +829,10 @@ python evaluate.py --model-id ft:gpt-4.1-mini:xxx
 import pandas as pd
 from src.Traction.post_estimate_analysis.data_vis_utils import *
 
-# Load results
+# Load results and country metadata
 df = pd.read_csv('/path/to/agreement_monetary_results.csv')
-
-# Add income groups
-df['income_group'] = df['country'].apply(classify_income_group_from_country_name)
+country_map = pd.read_excel('src/Traction/docs/reference/country_meta_info.xlsx')
+df = df.merge(country_map[['ISO3', 'income_group']], left_on='Primary Country Code', right_on='ISO3', how='left')
 
 # Filter to analysis period
 df = filter_year_range(df, start_year=2015, end_year=2023)
@@ -734,9 +853,29 @@ plot_stacked_proportions_by_year(share)
 ```
 
 **Recommended notebooks for analysis:**
+- `src/Traction/post_estimate_analysis/results_data_transformation.ipynb`: Authoritative data transformation (raw inference → `df_fin.csv`)
 - `src/Traction/post_estimate_analysis/data_vis_v4.ipynb`: Latest comprehensive analysis
 - `src/Traction/post_estimate_analysis/compare_old_new_pipeline.ipynb`: Compare pipeline versions
-- `src/Traction/post_estimate_analysis/results_data_transformation.ipynb`: Data transformation utilities
+
+### Incremental Update Workflow
+
+```bash
+cd src/Traction/incremental_update
+
+# Full incremental pipeline (after QA gate at step 2)
+python 01_data_preprocess_incremental.py --input-root /path/to/new_xml
+python 02_meta_data_postprocess.py --input-path /path/to/raw_metadata.xlsx
+
+# ⚠ Manual QA: verify country matching, create clean metadata workbook
+
+python 03_incremental_aiv_update.py --raw-xml-root /path/to/xml \
+  --metadata-path /path/to/clean_metadata.xlsx --output-dir /path/to/output
+bash 04_topic_identification_incremental.sh
+bash 05_paragraph_back2_doc_incremental.sh
+bash 06_inference_incremental.sh
+python 07_merge_all_incremental.py --incremental-dir /path/to/incremental \
+  --main-dir /path/to/main
+```
 
 ## Troubleshooting
 
