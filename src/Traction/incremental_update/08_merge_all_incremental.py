@@ -1,11 +1,23 @@
 """
-Step 7: Merge all incremental results with main datasets.
+Step 8: Merge incremental results against the main-pipeline base.
 
-Merged files are written to the incremental output directory — the original
-main files are NEVER modified.
+Merged files are written to the incremental output directory — the main-base
+files are NEVER modified.
+
+The main-dataset baseline lives in
+`/data/home/xiong/data/Fund/CSR/Tractions/output/main_base/`, refreshed by
+`src/Traction/scripts/inference/run_main_base_refresh.sh` (see
+`src/Traction/main_base_refresh_step.md`). We merge a curated subset of the
+incremental outputs against it (not the four per-sector stance/agreement
+results — those are intentionally excluded; only the dataset-level files and
+the new general-agreement output are folded in).
+
+To merge against a different base (e.g. the frozen archive at
+`/data/home/xiong/data/Fund/CSR/Traction-archieve/output/`), pass
+`--main-dir` explicitly.
 
 Usage:
-    python 07_merge_all_incremental.py [--incremental-dir DIR] [--main-dir DIR]
+    python 08_merge_all_incremental.py [--incremental-dir DIR] [--main-dir DIR]
 """
 
 from __future__ import annotations
@@ -16,6 +28,18 @@ from pathlib import Path
 
 import pandas as pd
 
+
+def _normalize_key_series(s: pd.Series) -> pd.Series:
+    """Normalize a dedup-key column so int/float/string variants compare equal.
+
+    `Print ISBN` ends up as float64 in some archive CSVs (pandas infers float
+    when any row is NaN) and int64 in incremental CSVs. A naive `.astype(str)`
+    then yields '9798400259814.0' vs '9798400259814', breaking the overlap
+    check. Strip trailing '.0' after string-casting to fix this.
+    """
+    return s.astype(str).str.replace(r'\.0$', '', regex=True)
+
+
 _THIS_DIR = Path(__file__).resolve().parent
 _TRACTION_DIR = _THIS_DIR.parent
 if str(_TRACTION_DIR) not in sys.path:
@@ -24,7 +48,7 @@ if str(_TRACTION_DIR) not in sys.path:
 import config  # noqa: E402
 
 DEFAULT_INCREMENTAL_DIR = config.output_dir / "incremental_update" / "05252026_update"
-DEFAULT_MAIN_DIR = config.output_dir
+DEFAULT_MAIN_DIR = config.output_dir / "main_base"
 
 # Normalize incremental topic names to match the main dataset's short convention.
 TOPIC_RENAME = {
@@ -35,16 +59,22 @@ TOPIC_RENAME = {
     "External Stance": "External",
 }
 
-# Files to merge: (incremental_name, main_name, merged_output_name, dedup_key)
-# dedup_key is used to identify rows already in main — only genuinely new rows are appended.
+# Files to merge: (incremental_name, main_name_relative_to_main_dir, merged_output_name, dedup_key)
+# dedup_key identifies rows already in main — only genuinely new rows are appended.
+# Per user direction: only merge the dataset-level files + general agreement +
+# the regression core. Per-task stance/agreement results (monetary/fiscal ×
+# stance/agreement) are intentionally NOT merged here.
+#
+# Note: `document_by_type_sector_incremental.csv` is intentionally NOT merged.
+# It has a different schema from the archive's `df_documents_sector.csv` (long
+# format with type/topic/text vs wide doc-level with 73 cols of metadata), so
+# concat would produce an incoherent table. Both files remain available
+# separately in their respective directories.
 MERGE_SPECS = [
     ("df_aiv_incremental.csv",                "df_aiv.csv",                    "df_aiv_merged.csv",                    "Print ISBN"),
-    ("df_paragraphs_incremental.csv",         "df_paragraphs.csv",            "df_paragraphs_merged.csv",             "Print ISBN"),
-    ("document_by_type_sector_incremental.csv","document_by_type_sector.csv",  "document_by_type_sector_merged.csv",   "Print ISBN"),
-    ("agreement_monetary_results.csv",         "agreement_monetary_results.csv","agreement_monetary_results_merged.csv", "Print ISBN"),
-    ("agreement_fiscal_results.csv",           "agreement_fiscal_results.csv",  "agreement_fiscal_results_merged.csv",  "Print ISBN"),
-    ("stance_monetary_results.csv",            "stance_monetary_results.csv",   "stance_monetary_results_merged.csv",   "Print ISBN"),
-    ("stance_fiscal_results.csv",              "stance_fiscal_results.csv",     "stance_fiscal_results_merged.csv",     "Print ISBN"),
+    ("df_paragraphs_incremental.csv",         "df_paragraphs.csv",             "df_paragraphs_merged.csv",             "Print ISBN"),
+    ("df_documents_general_incremental.csv",  "df_documents_general.csv",      "df_documents_general_merged.csv",      "Print ISBN"),
+    ("df_fin_core_incremental.csv",           "df_fin_reg_core.csv",           "df_fin_reg_core_merged.csv",           "Print ISBN"),
 ]
 
 
@@ -75,9 +105,10 @@ def _merge_one(
     main_rows = len(df_main)
 
     if dedup_key and dedup_key in df_main.columns and dedup_key in df_incr.columns:
-        # Keep all main rows; only append incremental rows whose key is NOT in main
-        main_keys = set(df_main[dedup_key].astype(str))
-        already_in_main = df_incr[dedup_key].astype(str).isin(main_keys)
+        # Keep all main rows; only append incremental rows whose key is NOT in main.
+        # Normalize on both sides — see _normalize_key_series for why.
+        main_keys = set(_normalize_key_series(df_main[dedup_key]))
+        already_in_main = _normalize_key_series(df_incr[dedup_key]).isin(main_keys)
         skipped = int(already_in_main.sum())
         df_incr_new = df_incr[~already_in_main]
     else:

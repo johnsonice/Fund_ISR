@@ -9,11 +9,14 @@ Complete end-to-end AI pipeline for analyzing IMF Article IV consultation report
 - **Topic Classification**: Classify paragraphs into 6 macroeconomic categories with confidence scores
 - **Stance Detection**: Extract monetary/fiscal policy stance (current + future direction) for IMF staff and authorities
 - **Agreement Analysis**: Detect staff-authorities agreement/disagreement with specific disagreement area extraction
+- **General (Cross-Sector) Agreement**: Zero-shot agreement classification across all sectors (`inference_general_agreement.py`)
 - **Production CLI**: Unified interface (`inference_agreement_stance.py`) for both monetary and fiscal domains
 - **Batch Processing**: Cost-effective large-scale analysis using OpenAI Batch API
+- **Final Dataset Assembly**: `create_final_dataset.py` combines all inference outputs into `df_fin.csv` / `df_fin_reg_core.csv`
 - **Post-Estimation Analysis**: Income group classification, trend analysis, and publication-quality charts
-- **Prompt Library**: 17+ prompts with 4 variants per task (simple, with_definitions, few_shot, chain_of_thought)
-- **Fine-Tuning Support**: Pipeline for fine-tuning on domain-specific stance classification
+- **Prompt Library**: 19 prompts — 4 variants per task (simple, with_definitions, few_shot, chain_of_thought) plus 2 general-agreement variants and 1 topic-classification prompt
+- **Fine-Tuning Support**: Pipeline for fine-tuning GPT-4.1-mini across all four task types (monetary/fiscal × stance/agreement)
+- **Incremental Update Pipeline**: 10-step pipeline for ingesting new Article IV reports and merging into the main dataset
 
 ## Environment Setup
 
@@ -39,23 +42,29 @@ External data should be placed at `~/dev/Fund/CSR/Tractions/` (Linux) or configu
   - `data_preprocess.py` - XML paragraph extraction
   - `topic_identification*.py` - Topic classification (async/batch)
   - `paragraph_back2_doc.py` - Document-level aggregation
-  - `inference_agreement_stance.py` - Production stance/agreement inference
+  - `inference_agreement_stance.py` - Production per-sector stance/agreement inference (monetary/fiscal)
+  - `inference_general_agreement.py` - Zero-shot cross-sector general agreement inference
+  - `create_final_dataset.py` - Build the final `df_fin.csv` / `df_fin_reg_core.csv` analysis dataset
   - `llm_batch_process_utils.py` - Flexible message building utilities
-  - `scripts/` - Batch execution shell scripts
-  - `post_estimate_analysis/` - Visualization toolkit
-  - `train_eval/` - Fine-tuning pipeline
+  - `scripts/inference/` - Batch execution shell scripts (per-task, parallel runner, full main-base refresh)
+  - `scripts/training/` - Fine-tuning shell scripts
+  - `post_estimate_analysis/` - Visualization toolkit + shared `final_dataset_utils.py`
+  - `train_eval/` - Fine-tuning pipeline (with `README.md` and `PIPELINE_DESIGN.md`)
+  - `incremental_update/` - Multi-step pipeline for ingesting new Article IV reports
+  - `docs/` - Evaluation results, data documentation, country reference data
 - **`src/Traction/prompts/`** - Pydantic schemas and markdown prompt templates
-  - 4 variants per task: simple, with_definitions, few_shot (recommended), chain_of_thought
-- **`notebooks/Traction/`** - Evaluation notebooks, inference demos, interactive analysis
-- **`src/Others/`** - Experimental scripts
+  - 4 variants per per-sector task (simple, with_definitions, few_shot, chain_of_thought)
+  - Plus `general_agreement_simple*.md` (zero-shot) and `topic_classification.md`
+- **`notebooks/Traction/`** - Evaluation notebooks (`llm_fiscal_eval_demo_v2.ipynb`, `llm_monetary_eval_demo_v2.ipynb`), inference demos, topic-classification demos
+- **`src/Others/`** - Experimental scripts (vLLM/SGLang servers, RAM table processing, etc.)
 
 ## Pipeline Overview
 
-**Complete 5-Stage Workflow:**
+**Complete 6-Stage Workflow:**
 
 ```
 Stage 1: XML Extraction
-  └─> data_preprocess.py → df_paragraphs.csv
+  └─> data_preprocess.py → df_paragraphs.csv, df_aiv.csv
 
 Stage 2: Topic Classification (Optional)
   └─> topic_identification*.py → paragraph_with_sector.csv
@@ -63,13 +72,19 @@ Stage 2: Topic Classification (Optional)
 Stage 3: Document Aggregation
   └─> paragraph_back2_doc.py → document_by_type_sector.csv
 
-Stage 4: Stance & Agreement Inference (PRODUCTION)
+Stage 4a: Per-Sector Stance & Agreement Inference (PRODUCTION)
   └─> inference_agreement_stance.py → agreement/stance results CSVs
       ├─ Agreement: monetary/fiscal (disagreement area extraction)
       └─ Stance: monetary/fiscal (current + future direction)
 
-Stage 5: Post-Estimation Analysis
-  └─> post_estimate_analysis/data_vis.ipynb → Publication charts
+Stage 4b: General (Cross-Sector) Agreement
+  └─> inference_general_agreement.py → df_documents_general.csv
+
+Stage 5: Final Dataset Assembly
+  └─> create_final_dataset.py → df_fin.csv, df_fin_reg_core.csv
+
+Stage 6: Post-Estimation Analysis
+  └─> post_estimate_analysis/data_vis_v4.ipynb → Publication charts
       ├─ Income group trends (AE/EM/LC)
       ├─ Agreement proportions over time
       ├─ IMF vs authorities stance comparison
@@ -80,9 +95,13 @@ Stage 5: Post-Estimation Analysis
 - `data_preprocess.py` - Extract paragraphs from XML
 - `topic_identification*.py` - Topic classification (async or batch)
 - `paragraph_back2_doc.py` - Aggregate to document level
-- `inference_agreement_stance.py` - Unified stance/agreement inference CLI
-- `scripts/run_all.sh` - Parallel execution orchestrator
+- `inference_agreement_stance.py` - Unified per-sector stance/agreement inference CLI
+- `inference_general_agreement.py` - Zero-shot general agreement inference
+- `create_final_dataset.py` - Build the final analysis dataset
+- `scripts/inference/run_all.sh` - Parallel runner for the 4 per-sector tasks
+- `scripts/inference/run_main_base_refresh.sh` - End-to-end refresh (parallel inference + final dataset)
 - `post_estimate_analysis/data_vis_utils.py` - Visualization utilities
+- `post_estimate_analysis/final_dataset_utils.py` - Shared final-dataset construction library
 
 **Topic Categories:**
 1. Economic Outlook (GDP, growth, forecasts)
@@ -112,24 +131,31 @@ python src/Traction/paragraph_back2_doc.py
 
 # Step 4: Run stance & agreement inference (PRODUCTION)
 
-# Option A: Use batch execution scripts (recommended for parallel processing)
-bash src/Traction/scripts/run_all.sh                     # Run all tasks in parallel
-bash src/Traction/scripts/run_monetary_stance.sh         # Monetary stance only
-bash src/Traction/scripts/run_monetary_agreement.sh      # Monetary agreement only
-bash src/Traction/scripts/run_fiscal_stance.sh           # Fiscal stance only
-bash src/Traction/scripts/run_fiscal_agreement.sh        # Fiscal agreement only
+# Option A: Full main-base refresh (recommended) — runs all 4 per-sector tasks AND
+# the zero-shot general-agreement task in parallel, then builds the final dataset.
+bash src/Traction/scripts/inference/run_main_base_refresh.sh
 
-# Option B: Use CLI directly
-# Monetary agreement
+# Option B: Per-task shell scripts
+bash src/Traction/scripts/inference/run_all.sh                  # 4 per-sector tasks in parallel
+bash src/Traction/scripts/inference/run_general_agreement.sh    # Zero-shot cross-sector
+bash src/Traction/scripts/inference/run_monetary_stance.sh      # Monetary stance only
+bash src/Traction/scripts/inference/run_monetary_agreement.sh   # Monetary agreement only
+bash src/Traction/scripts/inference/run_fiscal_stance.sh        # Fiscal stance only
+bash src/Traction/scripts/inference/run_fiscal_agreement.sh     # Fiscal agreement only
+
+# Option C: CLI directly
 python src/Traction/inference_agreement_stance.py agreement \
   --domain monetary --submit --post-process
 
-# Fiscal stance
 python src/Traction/inference_agreement_stance.py stance \
   --domain fiscal --submit --post-process
 
-# Step 5: Analyze results
-jupyter notebook src/Traction/post_estimate_analysis/data_vis.ipynb
+# Step 5: Build the final analysis dataset
+python src/Traction/create_final_dataset.py
+# (or via the shell wrapper: bash src/Traction/scripts/inference/run_create_final_dataset.sh)
+
+# Step 6: Analyze and visualize results
+jupyter notebook src/Traction/post_estimate_analysis/data_vis_v4.ipynb
 ```
 
 ### Stance & Agreement Inference Options
@@ -161,12 +187,20 @@ python src/Traction/inference_agreement_stance.py stance \
 
 ### Batch Execution Scripts
 
+Located in `src/Traction/scripts/inference/`:
+
 ```bash
-# Run all 4 tasks in parallel (monetary/fiscal × stance/agreement)
-bash src/Traction/scripts/run_all.sh
+# Run all 4 per-sector tasks in parallel (monetary/fiscal × stance/agreement)
+bash src/Traction/scripts/inference/run_all.sh
+
+# Full main-base refresh: parallel inference (4 per-sector + general) + final dataset
+bash src/Traction/scripts/inference/run_main_base_refresh.sh
+
+# Build only the final dataset
+bash src/Traction/scripts/inference/run_create_final_dataset.sh
 
 # Individual scripts with custom prompt variant
-PROMPT_VARIANT=few_shot bash src/Traction/scripts/run_monetary_stance.sh
+PROMPT_VARIANT=few_shot bash src/Traction/scripts/inference/run_monetary_stance.sh
 ```
 
 **Available Tasks:** `agreement` (staff-authorities), `stance` (policy direction)
@@ -187,12 +221,22 @@ PROMPT_VARIANT=few_shot bash src/Traction/scripts/run_monetary_stance.sh
 - `agreement_fiscal_results.csv` - Fiscal agreement classifications
 - `stance_monetary_results.csv` - Monetary stance (current + future) for each text
 - `stance_fiscal_results.csv` - Fiscal stance classifications
+- `df_documents_general.csv` - Zero-shot cross-sector general agreement results
+
+**After final dataset assembly (`create_final_dataset.py`):**
+- `df_fin.csv` - Full analysis-ready dataset with text columns and `policy_mix_staff` / `policy_mix_buff`
+- `df_fin_reg_core.csv` - Core subset matching the archive schema; consumed by `incremental_update/08_merge_all_incremental.py`
 
 ### Evaluation & Fine-Tuning
 
 **Evaluate prompts and models:**
 ```bash
-jupyter notebook notebooks/Traction/evaluate_fiscal_monetray_pipeline.ipynb
+# Per-domain evaluation demos
+jupyter notebook notebooks/Traction/llm_fiscal_eval_demo_v2.ipynb
+jupyter notebook notebooks/Traction/llm_monetary_eval_demo_v2.ipynb
+
+# Comprehensive scripted evaluation across models and prompts
+python src/Traction/train_eval/evaluate_fiscal_monetray_pipeline.py
 ```
 
 **Latest Evaluation Results (January 2026):**
@@ -240,10 +284,11 @@ Fine-tuning documentation available in [train_eval/README.md](src/Traction/train
 The `post_estimate_analysis/` toolkit provides production-ready visualization and statistical analysis:
 
 ### Features
-- **Income group classification**: Auto-classify countries into AE (advanced economies), EM (emerging markets), LC (low-income)
+- **Income group classification**: Merge AE / EM / LIC mappings from `src/Traction/docs/reference/country_meta_info.xlsx` (ISO3-keyed)
+- **Final dataset assembly** (`create_final_dataset.py` + `final_dataset_utils.py`): Combine per-sector inference, general agreement, and `df_aiv.csv` into `df_fin.csv` / `df_fin_reg_core.csv` with derived combined-agreement measures and a 9-category policy mix (e.g., MtFt, MnFt)
 - **Agreement analysis**:
   - Compute "no disagreement" proportions by year and income group
-  - Extract and categorize disagreement areas (e.g., inflation targets, interest rate timing)
+  - Extract and categorize disagreement areas (e.g., inflation targets, interest rate timing) via `classify_disagreement_areas.py`
   - Multi-year trend visualization
 - **Stance analysis**:
   - Pivot stance data to wide format (IMF staff vs country authorities)
@@ -257,9 +302,13 @@ The `post_estimate_analysis/` toolkit provides production-ready visualization an
 import pandas as pd
 from src.Traction.post_estimate_analysis.data_vis_utils import *
 
-# Load and prepare data
+# Load results and merge income groups from the reference workbook
 df = pd.read_csv('agreement_monetary_results.csv')
-df['income_group'] = df['country'].apply(classify_income_group_from_country_name)
+country_map = pd.read_excel('src/Traction/docs/reference/country_meta_info.xlsx')
+df = df.merge(
+    country_map[['ISO3', 'income_group']],
+    left_on='Primary Country Code', right_on='ISO3', how='left',
+)
 df = filter_year_range(df, start_year=2015, end_year=2023)
 
 # Agreement trends
@@ -275,26 +324,36 @@ share = compute_imf_vs_authority_share(wide, imf_col='imf_staff_stance_current',
 plot_stacked_proportions_by_year(share)
 ```
 
-See `src/Traction/post_estimate_analysis/data_vis.ipynb` for complete examples.
+See `src/Traction/post_estimate_analysis/data_vis_v4.ipynb` for complete examples.
 
 ## Prompt Library
 
-The [prompts/](src/Traction/prompts/) directory contains 17+ markdown templates:
+The [prompts/](src/Traction/prompts/) directory contains 19 registered prompts:
 
-**Prompt Variants (4 per task):**
-- `simple` - Minimal instructions
+**Prompt Variants (4 per per-sector task):**
+- `simple` - Minimal instructions (default for fine-tuned models)
 - `with_definitions` - Detailed category definitions
-- `few_shot` - Includes examples (often performs best)
+- `few_shot` - Includes examples (best for base/zero-shot models)
 - `chain_of_thought` - Adds reasoning step
 
-**Available Prompts:** `topic_classification`, `monetary_stance_*`, `monetary_agreement_*`, `fiscal_stance_*`, `fiscal_agreement_*`
+**Available Prompts:**
+- Topic: `topic_classification`
+- Per-sector (4 variants each): `monetary_stance_*`, `monetary_agreement_*`, `fiscal_stance_*`, `fiscal_agreement_*`
+- General zero-shot cross-sector: `general_agreement_simple`, `general_agreement_simple_v2`
 
 **PROMPT_REGISTRY** in [schema.py](src/Traction/prompts/schema.py) maps prompt keys to files and Pydantic response models.
 
 ## Project Status
 
+**Completed:**
+- [x] Fine-tuned pipeline for both monetary and fiscal domains (GPT-4.1-mini, all 4 task types)
+- [x] Comprehensive evaluation across GPT-4o, GPT-5, GPT-5-mini, and GPT-4.1 fine-tuned models
+- [x] Production inference using fine-tuned GPT-4.1 with `simple` prompts
+- [x] Incremental update pipeline for ingesting new Article IV reports
+- [x] Zero-shot cross-sector general agreement inference
+- [x] Unified final dataset assembly (`create_final_dataset.py`) shared by main and incremental pipelines
+
 **To Do:**
-- [ ] Experiment fine-tuned pipeline with the formalized prompts for both monetary and fiscal domains
 - [ ] Extend data range to current (2025-2026 Article IV reports)
 - [ ] Explore training strategies beyond SFT (e.g., RFT, RLHF)
 

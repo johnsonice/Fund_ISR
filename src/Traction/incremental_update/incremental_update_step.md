@@ -16,7 +16,15 @@ This note is for agent reference when running the incremental Article IV update 
 4. `04_topic_identification_incremental.sh`
 5. `05_paragraph_back2_doc_incremental.sh`
 6. `06_inference_incremental.sh`
-7. `07_merge_all_incremental.py`
+7. `07_general_sentiment_incremental.sh`
+   - Zero-shot general (cross-sector) agreement classification (-5..5 scores across Monetary/Fiscal/External/Financial/Real plus disagreement-area dicts).
+   - Consumes `df_documents_incremental.csv` (one row per doc with `staff`/`buff`/`country`/`year` columns); main output: `df_documents_general_incremental.csv`.
+   - For older runs missing `df_documents_incremental.csv`, rebuild it with `adhoc/generate_df_documents_from_aiv.py` before running this step.
+7b. `07b_create_final_dataset_incremental.py`
+   - Combines `df_aiv_incremental.csv` + 4 per-sector inference results + zero-shot general agreement into document-level analysis datasets.
+   - Outputs: `df_fin_incremental.csv` (full with text columns) and `df_fin_core_incremental.csv` (core subset matching `df_fin_reg_core.csv` schema).
+   - Column naming uses legacy `_gpt_ft` suffix for compatibility with existing `df_fin_reg_core.csv`.
+8. `08_merge_all_incremental.py`
 
 ## Required workflow
 
@@ -107,7 +115,7 @@ Inside that final combined folder, save:
 - `df_aiv_incremental.csv`
 - `df_paragraphs_incremental.csv`
 
-### Steps 4-7
+### Steps 4-8
 Continue the downstream incremental pipeline only after step 03 succeeds.
 
 If multiple years were processed, continue downstream steps from the **combined** `df_aiv_incremental.csv` and **combined** `df_paragraphs_incremental.csv`, not from a single-year output only.

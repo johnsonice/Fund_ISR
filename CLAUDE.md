@@ -123,7 +123,8 @@ After running stance/agreement inference, use these tools for analysis:
 
 **Key modules:**
 - `data_vis_utils.py`: Reusable visualization utilities (sector-agnostic design, no country classification logic)
-- `results_data_transformation.ipynb`: Authoritative reference for data transformation from raw inference outputs to final analysis-ready dataset (`df_fin.csv`)
+- `final_dataset_utils.py`: Authoritative data transformation library — builds `df_fin.csv` / `df_fin_reg_core.csv` from raw inference outputs. Called by `src/Traction/create_final_dataset.py` (main pipeline) and `src/Traction/incremental_update/07b_create_final_dataset_incremental.py` (incremental pipeline)
+- `classify_disagreement_areas.py`: LLM-based categorizer for free-text disagreement areas (uses `disagreement_area_cache.json` for caching)
 - `data_vis_v4.ipynb`: Latest comprehensive analysis notebook
 
 **Income group classification:**
@@ -140,12 +141,13 @@ After running stance/agreement inference, use these tools for analysis:
    - Pivot stance data to wide format (IMF vs authority comparison)
    - Compute stance direction scores (loosening/tightening scale)
    - Stacked proportion charts showing IMF advice vs authority policy direction
-3. **Data transformation** (`results_data_transformation.ipynb`):
+3. **Data transformation** (`create_final_dataset.py` + `final_dataset_utils.py`):
+   - Combines `df_aiv.csv` + 4 per-sector inference results + zero-shot general agreement into document-level analysis datasets
    - Pivots long-format stance data to wide format (staff vs authority side-by-side)
    - Derives combined agreement measures (`mon_agreement_general`, `fis_agreement_general`) from multiple sources
    - Creates 9-category policy mix (monetary x fiscal combinations: MtFt, MnFt, etc.)
    - Cleans hallucinated LLM values and consolidates unclear/no-change stance values
-   - Outputs: `df_fin.csv` (final dataset with 41 columns ready for statistical analysis)
+   - Outputs: `df_fin.csv` (full dataset with text columns) and `df_fin_reg_core.csv` (core subset for downstream merging)
 4. **Report counting**: Track Article IV report volumes by year and income group
 
 **Example usage (in notebook):**
@@ -176,7 +178,7 @@ plot_group_lines_by_year(proportions, groups=['ALL', 'AE', 'EM', 'LIC'])
 
 **Location**: `src/Traction/incremental_update/`
 
-A 7-step pipeline for processing new Article IV reports and merging them into the existing dataset:
+An 8-step pipeline for processing new Article IV reports and merging them into the existing dataset:
 
 ```bash
 # Step 1: Extract metadata from new XML packages
@@ -206,9 +208,18 @@ bash src/Traction/incremental_update/05_paragraph_back2_doc_incremental.sh
 # Step 6: Run all 4 stance/agreement inference jobs (uses fine-tuned models)
 bash src/Traction/incremental_update/06_inference_incremental.sh
 
-# Step 7: Merge incremental results with main dataset
-python src/Traction/incremental_update/07_merge_all_incremental.py \
+# Step 7: Zero-shot general (cross-sector) agreement classification
+bash src/Traction/incremental_update/07_general_sentiment_incremental.sh
+
+# Step 7b: Build incremental final dataset (df_fin.csv / df_fin_reg_core.csv)
+python src/Traction/incremental_update/07b_create_final_dataset_incremental.py
+
+# Step 8: Merge incremental results with main dataset
+python src/Traction/incremental_update/08_merge_all_incremental.py \
   --incremental-dir /path/to/incremental --main-dir /path/to/main
+
+# (Optional) Post-merge analysis on the combined sample
+jupyter notebook src/Traction/incremental_update/09_analysis_full_sample.ipynb
 ```
 
 **Key features:**
@@ -227,16 +238,20 @@ Modular shell scripts for running inference tasks:
 
 ```
 scripts/inference/
-├── run_all.sh                  # Runs all 4 tasks in parallel
-├── run_monetary_agreement.sh   # Monetary agreement only
-├── run_fiscal_agreement.sh     # Fiscal agreement only
-├── run_monetary_stance.sh      # Monetary stance only
-└── run_fiscal_stance.sh        # Fiscal stance only
+├── run_all.sh                       # Runs all 4 fine-tuned tasks in parallel
+├── run_monetary_agreement.sh        # Monetary agreement only
+├── run_fiscal_agreement.sh          # Fiscal agreement only
+├── run_monetary_stance.sh           # Monetary stance only
+├── run_fiscal_stance.sh             # Fiscal stance only
+├── run_general_agreement.sh         # Zero-shot cross-sector general agreement
+├── run_create_final_dataset.sh      # Build df_fin.csv / df_fin_reg_core.csv
+└── run_main_base_refresh.sh         # Orchestrator: parallel inference + final dataset
 ```
 
 - Default prompt variant: `simple` (optimized for fine-tuned models)
 - Override via environment variable: `PROMPT_VARIANT=few_shot bash run_all.sh`
 - Uses fine-tuned GPT-4.1 model IDs configured per task
+- `run_main_base_refresh.sh` is the recommended entry point for a fresh main-base build: runs `run_all.sh` and `run_general_agreement.sh` in parallel, then builds the final dataset
 
 **Training scripts**: `src/Traction/scripts/training/`
 - `prepare_all_tasks.sh`, `finetune_all_tasks.sh`, `evaluate_all_tasks.sh`, `evaluate_single.sh`
@@ -275,9 +290,12 @@ scripts/inference/
     - `topic_identification.py`: Async processing (small batches)
     - `topic_identification_batch.py`: Batch API processing (large datasets)
   - **Stance & agreement inference (PRODUCTION):**
-    - `inference_agreement_stance.py`: Unified script for agreement detection and stance classification
-    - Supports both monetary and fiscal domains
+    - `inference_agreement_stance.py`: Unified script for per-sector agreement detection and stance classification (monetary/fiscal)
+    - `inference_general_agreement.py`: Zero-shot cross-sector general agreement classification (reuses the same Batch API plumbing)
     - Uses OpenAI Batch API for cost efficiency
+  - **Final dataset assembly:**
+    - `create_final_dataset.py`: Combines `df_aiv.csv` + 4 per-sector inference results + general agreement → `df_fin.csv` and `df_fin_reg_core.csv`
+    - Delegates logic to `post_estimate_analysis/final_dataset_utils.py`; shared with the incremental pipeline's `07b_*.py`
   - **Shared utilities:**
     - `llm_batch_process_utils.py`: Message builders and batch processing helpers
     - `config.py`: Cross-platform path configuration
@@ -287,10 +305,11 @@ scripts/inference/
     - `prompts/*.md`: Markdown prompt templates (4 variants per task)
   - **Post-estimation analysis:**
     - `post_estimate_analysis/data_vis_utils.py`: Visualization utilities (sector-agnostic, no country classification logic)
-    - `post_estimate_analysis/results_data_transformation.ipynb`: Authoritative data transformation notebook (raw inference → `df_fin.csv`)
+    - `post_estimate_analysis/final_dataset_utils.py`: Authoritative data transformation library (raw inference → `df_fin.csv` / `df_fin_reg_core.csv`); shared by main and incremental pipelines
+    - `post_estimate_analysis/classify_disagreement_areas.py`: LLM-based categorizer for free-text disagreement areas (writes `disagreement_area_cache.json`)
     - `post_estimate_analysis/data_vis_v4.ipynb`: Latest analysis notebook
-    - `post_estimate_analysis/compare_old_new_pipeline.ipynb`: Pipeline comparison
-    - `post_estimate_analysis/v1/`: Archived legacy notebooks (data_vis.ipynb, data_vis_v3.ipynb)
+    - `post_estimate_analysis/adhoc/`: Ad-hoc analysis scripts and one-off notebooks
+    - `post_estimate_analysis/ v1/`: Archived legacy notebooks (note the leading space in the directory name) — contains `data_vis.ipynb`, `data_vis_v3.ipynb`, `compare_old_new_pipeline.ipynb`, and `vis_report.md`
   - **Incremental update pipeline:**
     - `incremental_update/01_data_preprocess_incremental.py`: Extract metadata from new XML packages
     - `incremental_update/02_meta_data_postprocess.py`: Enrich metadata with country codes and AIV flag
@@ -298,8 +317,12 @@ scripts/inference/
     - `incremental_update/04_topic_identification_incremental.sh`: Topic classification (Batch API)
     - `incremental_update/05_paragraph_back2_doc_incremental.sh`: Aggregate to document level
     - `incremental_update/06_inference_incremental.sh`: Run 4 stance/agreement inference jobs
-    - `incremental_update/07_merge_all_incremental.py`: Merge with main dataset (dedup by Print ISBN)
+    - `incremental_update/07_general_sentiment_incremental.sh`: Zero-shot general cross-sector agreement classification
+    - `incremental_update/07b_create_final_dataset_incremental.py`: Build incremental `df_fin.csv` / `df_fin_reg_core.csv` (calls shared `final_dataset_utils.py`)
+    - `incremental_update/08_merge_all_incremental.py`: Merge with main dataset (dedup by Print ISBN)
+    - `incremental_update/09_analysis_full_sample.ipynb`: Post-merge analysis notebook on the combined sample
     - `incremental_update/incremental_update_step.md`: Detailed workflow documentation
+    - `incremental_update/adhoc/`: Ad-hoc scripts for one-off incremental fixes
   - **Shell scripts:**
     - `scripts/inference/`: Modular inference scripts (run_all.sh, per-task scripts)
     - `scripts/training/`: Fine-tuning scripts (prepare, finetune, evaluate)
@@ -307,11 +330,15 @@ scripts/inference/
   - **Fine-tuning & evaluation pipeline:**
     - `train_eval/`: Fine-tuning pipeline for GPT-4.1-mini (see Fine-Tuning section)
     - `train_eval/evaluate_fiscal_monetray_pipeline.py`: Comprehensive model/prompt evaluation
+    - `train_eval/README.md`, `train_eval/PIPELINE_DESIGN.md`: Pipeline documentation
   - **Documentation & reference:**
-    - `docs/evaluation_results_comprehensive_current.md`: Latest evaluation results
+    - `docs/evaluation_results_comprehensive_current.md`: Latest evaluation results (GPT-4o vs GPT-5 vs GPT-4.1 fine-tuned)
     - `docs/evaluation_results_replication.md`: Replication study
+    - `docs/evaluation_results_comparison.md`: Side-by-side prompt/model comparison
+    - `docs/evaluation_metrics_gpt_5.md`: GPT-5-specific metric breakdowns
     - `docs/Data_Process_Documentation.md`: Data processing documentation
     - `docs/reference/country_meta_info.xlsx`: Country ISO3 codes and income group reference
+    - `docs/reference/archieve/`: Archived reference data
   - **Legacy & reference code:**
     - `temp/reference_code/`: Legacy scripts from earlier pipeline iterations (1-13 numbered scripts)
     - `temp/`: Temporary scripts and backups
@@ -323,10 +350,10 @@ scripts/inference/
   - `post_process_inference_data.py`: Data post-processing utilities
 
 - **`notebooks/Traction/`**: Jupyter notebooks for development and testing
-  - `evaluate_fiscal_monetray_pipeline.ipynb`: Comprehensive evaluation framework
+  - `llm_fiscal_eval_demo_v2.ipynb`, `llm_monetary_eval_demo_v2.ipynb`: Per-domain evaluation demos (current v2 versions)
   - `llm_fiscal_monetary_inference_demo.ipynb`: Inference examples
-  - `llm_fiscal_monetary_eval_demo.ipynb`: Evaluation demonstrations
   - `llm_topic_identification_demo.ipynb`: Topic classification demos
+  - `archieve/`: Older notebook versions
 
 ### Core Pipeline Components
 
@@ -407,18 +434,26 @@ Unified production script with modular design:
   - **Plotting helpers**: `plot_group_lines_by_year()`, `plot_stacked_proportions_by_year()`, `plot_category_trends()`
   - **Design philosophy**: Sector-agnostic, composable functions that return data (not side effects)
   - **Note**: Income group classification removed from this module; now done via external reference file merge
+- **`final_dataset_utils.py`**: Authoritative library that builds `df_fin.csv` / `df_fin_reg_core.csv` from raw inference outputs
+  - Pivots long-format stance data to wide (staff vs authority side-by-side)
+  - Derives combined agreement measures (`mon_agreement_general`, `fis_agreement_general`)
+  - Creates 9-category policy mix (MtFt, MnFt, etc.)
+  - Cleans hallucinated LLM values and consolidates unclear/no-change values
+  - Invoked by `src/Traction/create_final_dataset.py` (main pipeline) and `src/Traction/incremental_update/07b_create_final_dataset_incremental.py` (incremental pipeline)
+- **`classify_disagreement_areas.py`**: Categorizes free-text disagreement areas via LLM; persists results in `disagreement_area_cache.json`
 - **Country reference**: `docs/reference/country_meta_info.xlsx` — ISO3 codes and income group mappings
 - **Notebooks:**
-  - `results_data_transformation.ipynb`: Authoritative data transformation pipeline (raw inference → `df_fin.csv` with 41 columns)
   - `data_vis_v4.ipynb`: Latest comprehensive analysis notebook (current version)
-  - `compare_old_new_pipeline.ipynb`: Comparison between old and new pipeline results
-  - `v1/`: Archived legacy notebooks (data_vis.ipynb, data_vis_v3.ipynb)
+  - `adhoc/`: One-off analysis scripts and notebooks
+  - ` v1/`: Archived legacy notebooks (leading space in directory name) — `data_vis.ipynb`, `data_vis_v3.ipynb`, `compare_old_new_pipeline.ipynb`, `vis_report.md`
 
 **9. Incremental Update Pipeline (`src/Traction/incremental_update/`):**
-- 7-step pipeline for processing new Article IV reports and merging with existing data
-- Steps: XML metadata extraction → postprocessing → QA gate → text extraction → topic classification → aggregation → inference → merge
+- Multi-step pipeline for processing new Article IV reports and merging with existing data
+- Steps: XML metadata extraction → postprocessing → QA gate → text extraction → topic classification → aggregation → per-domain inference → general zero-shot sentiment → final dataset build → merge → analysis
 - Uses fine-tuned GPT-4.1 models with `simple` prompts for inference
+- Step 07b (`07b_create_final_dataset_incremental.py`) reuses the shared `final_dataset_utils.py` so incremental and main pipelines produce identically-shaped outputs
 - Deduplicates by Print ISBN when merging; original main files never modified
+- Post-merge analysis lives in `09_analysis_full_sample.ipynb`
 - See Incremental Data Update Pipeline section for full details
 
 ### Topic Classification System
@@ -500,8 +535,12 @@ External data structure (configured in `config.py`):
     - Columns: id, Print ISBN, topic, country, year, TEXT_AUTHOR, text, stance_current, stance_future
   - `stance_fiscal_results.csv`: Fiscal stance classifications
 
-**Post-analysis outputs (from results_data_transformation.ipynb and data_vis_v4.ipynb):**
-- `df_fin.csv`: Final analysis-ready dataset (41 columns including combined agreement measures, policy mix, stance coding)
+**Final dataset outputs (from `create_final_dataset.py` / `07b_create_final_dataset_incremental.py`):**
+- `df_fin.csv`: Full analysis-ready dataset with text columns + `policy_mix_staff` / `policy_mix_buff`
+- `df_fin_reg_core.csv`: Core subset matching the archive schema (consumed by `08_merge_all_incremental.py`)
+- `df_documents_general.csv`: Zero-shot cross-sector general agreement results (input to final dataset build)
+
+**Post-analysis outputs (from `data_vis_v4.ipynb`):**
 - Income group enhanced datasets (via `docs/reference/country_meta_info.xlsx` merge)
 - Year-over-year trend tables
 - Disagreement category analysis tables
@@ -546,13 +585,14 @@ The repository implements a complete pipeline from raw XML to publication-ready 
 └─────────────────────────────────────────────────────────────────────────┘
                               ↓
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ STAGE 5: Post-Estimation Analysis & Visualization                       │
+│ STAGE 5: Final Dataset Assembly + Analysis & Visualization              │
 ├─────────────────────────────────────────────────────────────────────────┤
-│ Input:  agreement/stance results CSVs                                   │
-│ Tools:  post_estimate_analysis/data_vis_utils.py                        │
-│         post_estimate_analysis/results_data_transformation.ipynb        │
+│ Input:  agreement/stance results CSVs + general agreement CSV           │
+│ Tools:  create_final_dataset.py (+ final_dataset_utils.py)              │
+│         post_estimate_analysis/data_vis_utils.py                        │
 │         post_estimate_analysis/data_vis_v4.ipynb                        │
-│ Output: - Income group classifications                                  │
+│ Output: - df_fin.csv / df_fin_reg_core.csv (analysis-ready datasets)    │
+│         - Income group classifications                                  │
 │         - Agreement trend charts                                        │
 │         - Stance comparison charts (IMF vs authorities)                 │
 │         - Disagreement area analysis                                    │
@@ -753,15 +793,15 @@ python src/Traction/topic_identification_batch.py        # batch API, large data
 # 3. Aggregate to document level
 python src/Traction/paragraph_back2_doc.py
 
-# 4. Run stance/agreement inference
-python src/Traction/inference_agreement_stance.py agreement \
-  --domain monetary --submit --post-process
-
-python src/Traction/inference_agreement_stance.py stance \
-  --domain fiscal --submit --post-process
+# 4. Run stance/agreement inference (per-sector + general)
+bash src/Traction/scripts/inference/run_all.sh                    # 4 fine-tuned tasks in parallel
+bash src/Traction/scripts/inference/run_general_agreement.sh      # zero-shot cross-sector
+# Or, for a fresh main-base build, run both groups + final dataset in one shot:
+bash src/Traction/scripts/inference/run_main_base_refresh.sh
 
 # 5. Transform results into final dataset
-jupyter notebook src/Traction/post_estimate_analysis/results_data_transformation.ipynb
+python src/Traction/create_final_dataset.py
+# (or via the shell wrapper: bash src/Traction/scripts/inference/run_create_final_dataset.sh)
 
 # 6. Analyze and visualize results
 jupyter notebook src/Traction/post_estimate_analysis/data_vis_v4.ipynb
@@ -852,10 +892,10 @@ share = compute_imf_vs_authority_share(wide, imf_col='imf_staff_stance_current',
 plot_stacked_proportions_by_year(share)
 ```
 
-**Recommended notebooks for analysis:**
-- `src/Traction/post_estimate_analysis/results_data_transformation.ipynb`: Authoritative data transformation (raw inference → `df_fin.csv`)
+**Recommended entry points for analysis:**
+- `src/Traction/create_final_dataset.py`: Authoritative data transformation (raw inference → `df_fin.csv` / `df_fin_reg_core.csv`)
 - `src/Traction/post_estimate_analysis/data_vis_v4.ipynb`: Latest comprehensive analysis
-- `src/Traction/post_estimate_analysis/compare_old_new_pipeline.ipynb`: Compare pipeline versions
+- `src/Traction/post_estimate_analysis/ v1/compare_old_new_pipeline.ipynb`: Compare pipeline versions (in archived ` v1/` dir)
 
 ### Incremental Update Workflow
 
@@ -873,7 +913,8 @@ python 03_incremental_aiv_update.py --raw-xml-root /path/to/xml \
 bash 04_topic_identification_incremental.sh
 bash 05_paragraph_back2_doc_incremental.sh
 bash 06_inference_incremental.sh
-python 07_merge_all_incremental.py --incremental-dir /path/to/incremental \
+bash 07_general_sentiment_incremental.sh
+python 08_merge_all_incremental.py --incremental-dir /path/to/incremental \
   --main-dir /path/to/main
 ```
 

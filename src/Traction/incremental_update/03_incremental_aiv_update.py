@@ -221,7 +221,10 @@ def build_incremental_doc_df(
     extraction_df = extraction_df.drop(columns=["metadata_merge_status"])
 
     extraction_df["buff_verified"] = extraction_df["paragraphs_bu"].apply(_list_has_content)
-    extraction_df["staff_verified"] = extraction_df["paragraphs_sa"].apply(_list_has_content)
+    extraction_df["staff_verified"] = (
+        extraction_df["paragraphs_sa"].apply(_list_has_content)
+        | extraction_df["paragraphs_sr"].apply(_list_has_content)
+    )
     extraction_df["has_buff"] = extraction_df.get("title_full", pd.Series([""] * len(extraction_df))).fillna("").astype(str).str.lower().str.contains("statement by|statement on", regex=True)
 
     def _should_drop_buff(row: pd.Series) -> bool:

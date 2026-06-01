@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# Run every other script in this folder in parallel and bubble up failures.
+# Run the 4 per-task fine-tuned inference jobs in parallel and bubble up failures.
+# Excludes general-agreement and final-dataset scripts — those have different
+# inputs/dependencies and are sequenced separately by run_main_base_refresh.sh.
 set -euo pipefail
 
 scripts_dir="$(cd "$(dirname "$0")" && pwd)"
 pids=()
 
-# Kick off every sibling script (except this one) in the background.
+# Exclude orchestration, general-agreement, final-dataset, and post-processing
+# scripts — only the 4 per-task `run_{domain}_{task}.sh` scripts run here.
+EXCLUDE_REGEX='^(run_all|run_main_base_refresh|run_general_agreement|run_create_final_dataset|run_post_process_all)\.sh$'
+
 for script in "$scripts_dir"/*.sh; do
   [ -e "$script" ] || continue
 
   script_base="$(basename "$script")"
-  if [ "$script_base" = "run_all.sh" ] || [ "$script_base" = "run_post_process_all.sh" ]; then
+  if [[ "$script_base" =~ $EXCLUDE_REGEX ]]; then
     continue
   fi
 
