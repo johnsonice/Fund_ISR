@@ -291,7 +291,7 @@ scripts/inference/
     - `topic_identification_batch.py`: Batch API processing (large datasets)
   - **Stance & agreement inference (PRODUCTION):**
     - `inference_agreement_stance.py`: Unified script for per-sector agreement detection and stance classification (monetary/fiscal)
-    - `inference_general_agreement.py`: Zero-shot cross-sector general agreement classification (reuses the same Batch API plumbing)
+    - `inference_general_agreement.py`: Zero-shot cross-sector general agreement classification (reuses the same Batch API plumbing). Default prompt is `general_agreement_simple_v2` — produces 7 per-sector agreement scores (`Agreement_General/Monetary/Fiscal/External/Financial/Real/Other`) and 6 per-sector disagreement-area lists (`Monetary/Fiscal/External/Financial/Real/Other_Sector`). Pass `--prompt-variant simple` to fall back to the legacy v1 schema (no `Agreement_Other`, uses `other_areas` list).
     - Uses OpenAI Batch API for cost efficiency
   - **Final dataset assembly:**
     - `create_final_dataset.py`: Combines `df_aiv.csv` + 4 per-sector inference results + general agreement → `df_fin.csv` and `df_fin_reg_core.csv`
@@ -538,7 +538,7 @@ External data structure (configured in `config.py`):
 **Final dataset outputs (from `create_final_dataset.py` / `07b_create_final_dataset_incremental.py`):**
 - `df_fin.csv`: Full analysis-ready dataset with text columns + `policy_mix_staff` / `policy_mix_buff`
 - `df_fin_reg_core.csv`: Core subset matching the archive schema (consumed by `08_merge_all_incremental.py`)
-- `df_documents_general.csv`: Zero-shot cross-sector general agreement results (input to final dataset build)
+- `df_documents_general.csv`: Zero-shot cross-sector general agreement results (input to final dataset build). v2 schema (current default): score columns `Agreement_General/Monetary/Fiscal/External/Financial/Real/Other` and disagreement-area lists `Monetary/Fiscal/External/Financial/Real/Other_Sector`. v1 schema (legacy): no `Agreement_Other`; uses `other_areas` instead of `Other_Sector`.
 
 **Post-analysis outputs (from `data_vis_v4.ipynb`):**
 - Income group enhanced datasets (via `docs/reference/country_meta_info.xlsx` merge)

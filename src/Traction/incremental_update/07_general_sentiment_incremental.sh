@@ -18,7 +18,7 @@ if [ ! -x "$TRACTION_PY" ]; then
   exit 1
 fi
 
-INCREMENTAL_DIR="/data/home/xiong/data/Fund/CSR/Tractions/output/incremental_update/05252026_update"
+INCREMENTAL_DIR="/data/home/xiong/data/Fund/CSR/Tractions/output/incremental_update/06_07_2026_update"
 DATA_FILE="${INCREMENTAL_DIR}/df_documents_incremental.csv"
 OUTPUT_FILE="df_documents_general_incremental.csv"
 MODEL=${MODEL:-gpt-5.4-mini}
@@ -29,7 +29,6 @@ echo "=== General Agreement (Zero-shot) ==="
   --output-dir "${INCREMENTAL_DIR}" \
   --output-file "${OUTPUT_FILE}" \
   --model "${MODEL}" \
-  --prompt-variant simple \
   --submit \
   --post-process \
   --max-output-tokens 16384

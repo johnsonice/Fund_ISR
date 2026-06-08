@@ -7,11 +7,12 @@ set -euo pipefail
 cd /data/home/xiong/dev/Fund_ISR/src/Traction/
 eval "$(conda shell.bash hook 2>/dev/null)" && conda activate traction 2>/dev/null || true
 
-INCREMENTAL_DIR="/data/home/xiong/data/Fund/CSR/Tractions/output/incremental_update/05252026_update"
+INCREMENTAL_DIR="/data/home/xiong/data/Fund/CSR/Tractions/output/incremental_update/06_07_2026_update"
 
 python paragraph_back2_doc.py \
   --input-csv "${INCREMENTAL_DIR}/paragraph_with_sector_incremental.csv" \
   --output-csv "${INCREMENTAL_DIR}/document_by_type_sector_incremental.csv" \
-  --metafile "${INCREMENTAL_DIR}/IMF_Main_MetaData_20260525_filtered.xlsx"
+  --metafile "${INCREMENTAL_DIR}/imf_staff_reports_html_all_metadata_postprocessed_2015plus.xlsx" \
+  --metafile-sheet filtered_sheet
 
 echo "Done. Output: ${INCREMENTAL_DIR}/document_by_type_sector_incremental.csv"

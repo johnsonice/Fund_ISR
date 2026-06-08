@@ -148,22 +148,42 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=DEFAULT_MAIN_DIR,
         help=f"Directory with main datasets. Default: {DEFAULT_MAIN_DIR}",
     )
+    parser.add_argument(
+        "--main-suffix",
+        type=str,
+        default="",
+        help="Suffix inserted before the .csv extension of each main file (e.g. "
+             "'_merged' makes 'df_aiv.csv' -> 'df_aiv_merged.csv'). Use when "
+             "merging against a previous incremental run's *_merged.csv outputs.",
+    )
     return parser.parse_args(argv)
+
+
+def _apply_main_suffix(main_name: str, suffix: str) -> str:
+    """Insert suffix before the file extension. 'df_aiv.csv' + '_merged' -> 'df_aiv_merged.csv'."""
+    if not suffix:
+        return main_name
+    if main_name.endswith(".csv"):
+        return main_name[:-4] + suffix + ".csv"
+    return main_name + suffix
 
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     incremental_dir = args.incremental_dir.resolve()
     main_dir = args.main_dir.resolve()
+    main_suffix = args.main_suffix
 
     print(f"Incremental dir: {incremental_dir}")
     print(f"Main dir:        {main_dir}")
+    if main_suffix:
+        print(f"Main suffix:     {main_suffix} (reading e.g. df_aiv{main_suffix}.csv from main dir)")
     print(f"Merged outputs:  {incremental_dir}")
     print()
 
     for incr_name, main_name, merged_name, dedup_key in MERGE_SPECS:
         incr_path = incremental_dir / incr_name
-        main_path = main_dir / main_name
+        main_path = main_dir / _apply_main_suffix(main_name, main_suffix)
         output_path = incremental_dir / merged_name
 
         result = _merge_one(incr_path, main_path, output_path, dedup_key)

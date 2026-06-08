@@ -84,10 +84,18 @@ def parse_args(argv=None):
         help="Path to write aggregated document-level CSV",
     )
     parser.add_argument(
-        '--metafile', 
-        type=str, 
+        '--metafile',
+        type=str,
         default='/data/home/xiong/data/Fund/CSR/Tractions/ArticleIV_xml_updated/IMF_Main_MetaData_20240710_toRan_filtered.xlsx',
         help="Path to metadata file",
+    )
+    parser.add_argument(
+        '--metafile-sheet',
+        type=str,
+        default=None,
+        help="Sheet name in the metafile workbook. Default: first sheet. "
+             "Use e.g. 'filtered_sheet' when pointing at step 02's multi-sheet "
+             "postprocessed workbook.",
     )
     return parser.parse_args(argv)
 
@@ -109,7 +117,7 @@ if __name__ == "__main__":
     df = _standardize_type_column(df)
     agg_df = _aggregate_to_document_by_type(df)
 
-    meta_df = pd.read_excel(args.metafile)
+    meta_df = pd.read_excel(args.metafile, sheet_name=args.metafile_sheet) if args.metafile_sheet else pd.read_excel(args.metafile)
     keep_cols = ['Print ISBN', 'Primary Country Code', 'Primary Country Description', 'Year from title']
     meta_df = meta_df[keep_cols]
     # Ensure matching dtypes for merge key 'Print ISBN'

@@ -112,6 +112,10 @@ ZERO_SHOT_RENAME = {
     "Agreement_External": "agreement_gpt_External",
     "Agreement_Financial": "agreement_gpt_Financial",
     "Agreement_Real": "agreement_gpt_Real",
+    # Added in v2 prompt; pandas .rename silently no-ops on v1 files that lack
+    # this column, so back-compat with the legacy general_agreement_simple
+    # output is preserved.
+    "Agreement_Other": "agreement_gpt_Other",
 }
 
 # Columns in df_fin_reg_core.csv (the target schema for the core output).
@@ -120,6 +124,7 @@ CORE_COLUMNS = [
     "publication_date", "bm_date",
     "agreement_gpt", "agreement_gpt_Monetary", "agreement_gpt_Fiscal",
     "agreement_gpt_External", "agreement_gpt_Financial", "agreement_gpt_Real",
+    "agreement_gpt_Other",
     "mon_stance_current_gpt_ft_staff", "mon_stance_future_gpt_ft_staff",
     "mon_stance_current_gpt_ft_buff", "mon_stance_future_gpt_ft_buff",
     "mon_agreement_gpt_ft", "mon_disagreement_areas_gpt_ft",

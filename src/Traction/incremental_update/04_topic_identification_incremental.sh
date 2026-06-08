@@ -7,9 +7,10 @@ set -euo pipefail
 cd /data/home/xiong/dev/Fund_ISR/src/Traction/
 eval "$(conda shell.bash hook 2>/dev/null)" && conda activate traction 2>/dev/null || true
 
-INCREMENTAL_DIR="/data/home/xiong/data/Fund/CSR/Tractions/output/incremental_update/05252026_update"
+PYTHON_BIN="${PYTHON_BIN:-/data/home/xiong/miniconda3/envs/traction/bin/python}"
+INCREMENTAL_DIR="/data/home/xiong/data/Fund/CSR/Tractions/output/incremental_update/06_07_2026_update"
 
-python topic_identification_batch.py \
+"${PYTHON_BIN}" topic_identification_batch.py \
   --input_file df_paragraphs_incremental.csv \
   --output-dir "${INCREMENTAL_DIR}" \
   --output_file paragraph_with_sector_incremental.csv \

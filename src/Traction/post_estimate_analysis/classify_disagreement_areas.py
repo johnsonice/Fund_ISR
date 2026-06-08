@@ -100,7 +100,11 @@ SECTOR_CATEGORIES: dict[str, list[str]] = {
         "External Factors",
         "Other",
     ],
-    "other_areas": [
+    # Cross-sector / "Other" bucket. The v1 general-agreement schema called
+    # this `other_areas` (a single free-text list); v2 promotes it to a
+    # first-class sector named `Other_Sector` alongside its own
+    # Agreement_Other score. Same conceptual categories on both sides.
+    "Other": [
         "Labor Market",
         "Climate Change and Environment",
         "Governance and Anti-Corruption",
@@ -294,15 +298,18 @@ def _extract_areas_from_general_csv(
         "External_gpt": "External",
         "Financial_gpt": "Financial",
         "Real_gpt": "Real",
-        "other_areas_gpt": "other_areas",
+        "other_areas_gpt": "Other",
     }
+    # Both v1 (`other_areas`) and v2 (`Other_Sector`) shapes route to the
+    # `Other` sector so the same category list classifies either column.
     incremental_cols = {
         "Monetary_Sector": "Monetary",
         "Fiscal_Sector": "Fiscal",
         "External_Sector": "External",
         "Financial_Sector": "Financial",
         "Real_Sector": "Real",
-        "other_areas": "other_areas",
+        "Other_Sector": "Other",
+        "other_areas": "Other",
     }
 
     col_map = {}

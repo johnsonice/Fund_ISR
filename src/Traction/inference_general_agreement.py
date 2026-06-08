@@ -47,10 +47,13 @@ def parse_args(argv=None):
              "Use 'df_documents_general_incremental.csv' for incremental runs.",
     )
     # Override the defaults from `_add_common_cli` that target stance/agreement runs.
+    # Default to the v2 prompt: adds Agreement_Other / Other_Sector and gives the
+    # model explicit policy-vs-outlook weighting + diplomatic-language guidance.
+    # Override with --prompt-variant simple for the legacy v1 schema.
     parser.set_defaults(
         data_file='/data/home/xiong/data/Fund/CSR/Tractions/output/df_documents.csv',
         model='gpt-5.4-mini',
-        prompt_variant='simple',
+        prompt_variant='simple_v2',
         max_output_tokens=16384,
     )
     return parser.parse_args(argv)

@@ -18,14 +18,38 @@ except ModuleNotFoundError:  # pragma: no cover
     import config  # type: ignore  # noqa: E402
 
 YEAR_PATTERN = re.compile(r"\b(19|20)\d{2}\b")
-ARTICLE_IV_PATTERN = re.compile(r"article\s*iv", re.IGNORECASE)
+# Matches Article IV consultations plus their regional-consultation equivalents
+# (Euro Area, ECCU, CEMAC, WAEMU "Common Policies of Member Countries" reports
+# and Euro Area "Annual Consultation" / "Common Euro Area Policies" variants).
+# Also tolerates the "Aticle IV" typo seen in at least one Euro Area 2016 title.
+ARTICLE_IV_PATTERN = re.compile(
+    r"ar?ticle\s*iv"  # "Article IV" with tolerance for the "Aticle IV" typo
+    r"|common\s+policies\b"
+    r"|common\s+euro\s+area\s+policies\b"
+    r"|annual\s+consultation\b"
+    r"|discussions?\s+with\s+regional\s+institutions\b",  # WAEMU 2011 regional review
+    re.IGNORECASE,
+)
+# Recognized regional consultation entities. When a title prefix matches one of
+# these (case-insensitive), even bare titles like "CEMAC: Press Release; Staff
+# Report; ..." should be treated as AIV-equivalent and have their country name
+# extracted, since the prefix unambiguously identifies a Fund member group.
+REGIONAL_ENTITY_PREFIXES = {
+    "euro area",
+    "euro area policies",
+    "eastern caribbean currency union",
+    "central african economic and monetary community",
+    "central african economic and monetary community (cemac)",
+    "west african economic and monetary union",
+    "west african economic and monetary union (waemu)",
+}
 DEFAULT_INPUT_PATH = config.output_dir / "incremental_update" / "spr_isr_com_articleiv_2025_metadata.xlsx"
 DEFAULT_OUTPUT_PATH = config.output_dir / "incremental_update" / "spr_isr_com_articleiv_2025_metadata_postprocessed.xlsx"
 DEFAULT_COUNTRY_REFERENCE_PATH = (
     Path(__file__).resolve().parent.parent / "docs" / "reference" / "country_meta_info.xlsx"
 )
 FILTERED_SHEET_COLUMNS = [
-    "package_folder",
+    "Print ISBN",
     "package_path",
     "title_full",
     "Country Name from title",
@@ -106,6 +130,15 @@ def _country_aliases(country_name: str) -> set[str]:
 
 
 def load_country_reference(country_reference_path: Path) -> dict[str, tuple[str, str]]:
+    """Load (alias → (canonical_country, iso3)) lookup from the reference workbook.
+
+    Reads the canonical sheet (`Sheet1`, must have unique ISO3 rows) for the
+    primary lookup. Optionally also reads an `aliases` sheet (columns:
+    `ISO3`, `Country`, `Country.1`) holding additional name variants that
+    point to existing canonical ISO3s. The split keeps `Sheet1` join-safe for
+    `final_dataset_utils.py` (which left-merges df_aiv on ISO3 and would
+    multiply rows if dup ISO3s lived in the canonical sheet).
+    """
     df_ref = pd.read_excel(country_reference_path)
     required_cols = {"Country", "ISO3"}
     missing_cols = required_cols - set(df_ref.columns)
@@ -122,6 +155,31 @@ def load_country_reference(country_reference_path: Path) -> dict[str, tuple[str,
         if not canonical_country:
             continue
         for name_col in name_columns:
+            country_name = _clean_text(row.get(name_col, ""))
+            if not country_name:
+                continue
+            for alias in _country_aliases(country_name):
+                lookup.setdefault(alias, (canonical_country, iso3))
+
+    # Optional `aliases` sheet: name variants pointing to canonical ISO3s.
+    try:
+        df_aliases = pd.read_excel(country_reference_path, sheet_name="aliases")
+    except (ValueError, KeyError):
+        return lookup
+
+    canonical_by_iso3 = {
+        _clean_text(row.get("ISO3", "")): _clean_text(row.get("Country", ""))
+        for _, row in df_ref.iterrows()
+        if _clean_text(row.get("ISO3", ""))
+    }
+    for _, row in df_aliases.iterrows():
+        iso3 = _clean_text(row.get("ISO3", ""))
+        if not iso3:
+            continue
+        canonical_country = canonical_by_iso3.get(iso3) or _clean_text(row.get("Country", ""))
+        if not canonical_country:
+            continue
+        for name_col in ("Country", "Country.1"):
             country_name = _clean_text(row.get(name_col, ""))
             if not country_name:
                 continue
@@ -153,7 +211,11 @@ def extract_year_from_title(title_full: str) -> int | None:
 
 
 def has_article_iv(title_full: str) -> bool:
-    return bool(ARTICLE_IV_PATTERN.search(_clean_text(title_full)))
+    cleaned = _clean_text(title_full)
+    if ARTICLE_IV_PATTERN.search(cleaned):
+        return True
+    prefix = _extract_title_prefix(cleaned).casefold()
+    return prefix in REGIONAL_ENTITY_PREFIXES
 
 
 def extract_country_name_from_title(title_full: str, countries: str = "") -> str:
@@ -184,6 +246,13 @@ def build_postprocessed_metadata(
     if "countries" not in df.columns:
         df["countries"] = ""
 
+    # Promote package_folder to Print ISBN as the primary key downstream steps use.
+    # Force string dtype so all-digit ISBNs aren't coerced to int/float on later read.
+    if "package_folder" in df.columns and "Print ISBN" not in df.columns:
+        df = df.rename(columns={"package_folder": "Print ISBN"})
+    if "Print ISBN" in df.columns:
+        df["Print ISBN"] = df["Print ISBN"].astype(str).str.strip()
+
     df["Country Name from title"] = df.apply(
         lambda row: extract_country_name_from_title(
             title_full=row.get("title_full", ""),
@@ -195,6 +264,12 @@ def build_postprocessed_metadata(
     df["Primary Country Code"] = [iso3 for iso3, _ in primary_country]
     df["Primary Country Description"] = [country for _, country in primary_country]
     df["Year from title"] = df["title_full"].apply(extract_year_from_title).astype("Int64")
+    # Fall back to publication_year when the title itself carries no 4-digit year
+    # (common for regional Common-Policies reports). publication_year comes from
+    # the canonical eLibrary URL via step 01.
+    if "publication_year" in df.columns:
+        fallback_year = pd.to_numeric(df["publication_year"], errors="coerce").astype("Int64")
+        df["Year from title"] = df["Year from title"].fillna(fallback_year)
     df["AIV"] = df["title_full"].apply(has_article_iv)
     return df
 
@@ -206,7 +281,6 @@ def build_filtered_sheet(df: pd.DataFrame) -> pd.DataFrame:
             filtered_df[column] = pd.NA
 
     filtered_df = filtered_df[FILTERED_SHEET_COLUMNS]
-    filtered_df = filtered_df.rename(columns={"package_folder": "Print ISBN"})
     return filtered_df
 
 
@@ -217,6 +291,22 @@ def _autofit_worksheet_columns(worksheet: Any) -> None:
             continue
         max_length = min(max(len(value) for value in values) + 2, 80)
         worksheet.column_dimensions[column_cells[0].column_letter].width = max_length
+
+
+def _force_text_column(worksheet: Any, column_name: str) -> None:
+    """Force a named column to text format so all-digit ISBN strings survive
+    Excel round-trips without being re-inferred as int/float."""
+    header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=False))
+    for cell in header_row:
+        if cell.value != column_name:
+            continue
+        col_letter = cell.column_letter
+        for data_cell in worksheet[col_letter][1:]:
+            if data_cell.value is None:
+                continue
+            data_cell.value = str(data_cell.value)
+            data_cell.number_format = "@"
+        break
 
 
 def resolve_output_path(input_path: Path, output_path: Path | None) -> Path:
@@ -268,6 +358,9 @@ def write_postprocessed_workbook(
             worksheet = writer.book[sheet_name]
             worksheet.freeze_panes = "A2"
             _autofit_worksheet_columns(worksheet)
+
+        _force_text_column(writer.book["metadata"], "Print ISBN")
+        _force_text_column(writer.book["filtered_sheet"], "Print ISBN")
 
 
 def main(argv: list[str] | None = None) -> None:
