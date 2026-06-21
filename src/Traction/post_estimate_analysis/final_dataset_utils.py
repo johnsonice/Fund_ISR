@@ -40,6 +40,10 @@ if str(_THIS_DIR) not in sys.path:
 import data_vis_utils as dv  # noqa: E402
 
 _TRACTION_DIR = _THIS_DIR.parent
+if str(_TRACTION_DIR) not in sys.path:
+    sys.path.insert(0, str(_TRACTION_DIR))
+from country_aliases import normalize_country_code  # noqa: E402
+
 DEFAULT_COUNTRY_META_PATH = _TRACTION_DIR / "docs" / "reference" / "country_meta_info.xlsx"
 
 # ---------------------------------------------------------------------------
@@ -417,6 +421,11 @@ def build_final_dataset(
     if end_year:
         df_aiv = df_aiv[df_aiv["year"] <= end_year]
     print(f"  After year filter: {len(df_aiv)} docs")
+
+    # Normalize legacy / non-standard country codes (e.g. UVK->KOS, EUR->G163) to
+    # the canonical ISO3 the reference carries, so the join below doesn't silently
+    # drop `country`/`income_group` for them. See country_aliases.py.
+    df_aiv["Primary Country Code"] = df_aiv["Primary Country Code"].map(normalize_country_code)
 
     country_map = pd.read_excel(country_meta_path)
     df_aiv = df_aiv.merge(country_map, left_on="Primary Country Code",

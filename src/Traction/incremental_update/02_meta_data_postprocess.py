@@ -7,15 +7,14 @@ from typing import Any
 
 import pandas as pd
 
-try:
-    import config
-except ModuleNotFoundError:  # pragma: no cover
-    import sys
+import sys
 
-    _TRACTION_DIR = Path(__file__).resolve().parent.parent
-    if str(_TRACTION_DIR) not in sys.path:
-        sys.path.insert(0, str(_TRACTION_DIR))
-    import config  # type: ignore  # noqa: E402
+_TRACTION_DIR = Path(__file__).resolve().parent.parent
+if str(_TRACTION_DIR) not in sys.path:
+    sys.path.insert(0, str(_TRACTION_DIR))
+
+import config  # noqa: E402
+from country_aliases import normalize_country_code  # noqa: E402
 
 YEAR_PATTERN = re.compile(r"\b(19|20)\d{2}\b")
 # Matches Article IV consultations plus their regional-consultation equivalents
@@ -192,7 +191,9 @@ def resolve_primary_country(country_name_from_title: str, country_lookup: dict[s
     for alias in _country_aliases(country_name_from_title):
         if alias in country_lookup:
             canonical_country, iso3 = country_lookup[alias]
-            return iso3, canonical_country
+            # Normalize legacy/non-standard codes (e.g. UVK->KOS) so downstream
+            # ISO3 joins against the reference succeed. See country_aliases.py.
+            return normalize_country_code(iso3), canonical_country
     return "", ""
 
 

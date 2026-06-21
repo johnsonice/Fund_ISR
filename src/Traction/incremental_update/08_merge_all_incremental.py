@@ -78,6 +78,47 @@ MERGE_SPECS = [
 ]
 
 
+def _coalesce_overlap(
+    df_main: pd.DataFrame,
+    df_incr: pd.DataFrame,
+    dedup_key: str,
+) -> tuple[pd.DataFrame, int]:
+    """Fill NaN cells in overlapping main rows from the matching incremental row.
+
+    Only main rows whose key also appears in the incremental file are touched,
+    and only their currently-NaN cells are filled (existing main values are
+    never overwritten). Returns the patched main frame and the number of cells
+    filled. Keys are matched on the normalized form so int/float/str variants of
+    `Print ISBN` align (see `_normalize_key_series`).
+    """
+    df_main = df_main.copy()
+    main_norm = _normalize_key_series(df_main[dedup_key])
+
+    # One incremental row per key (last wins, matching how the rest of the
+    # pipeline dedups), indexed by normalized key for alignment.
+    incr_by_key = df_incr.copy()
+    incr_by_key["_norm_key"] = _normalize_key_series(incr_by_key[dedup_key])
+    incr_by_key = incr_by_key.drop_duplicates(subset="_norm_key", keep="last").set_index("_norm_key")
+
+    # An incremental frame row-aligned to df_main's index (NaN where no overlap),
+    # so we can fill column-by-column. Object dtype keeps the assignment dtype-safe
+    # (no FutureWarning when e.g. a bool fills into a float column); df_main is
+    # re-typed by the final to_csv round-trip anyway.
+    incr_aligned = incr_by_key.reindex(main_norm.values)
+    incr_aligned.index = df_main.index
+
+    common_cols = [c for c in df_main.columns if c in df_incr.columns and c != dedup_key]
+    filled = 0
+    for col in common_cols:
+        fill_mask = df_main[col].isna() & incr_aligned[col].notna()
+        n = int(fill_mask.sum())
+        if n:
+            df_main[col] = df_main[col].astype(object)
+            df_main.loc[fill_mask, col] = incr_aligned.loc[fill_mask, col]
+            filled += n
+    return df_main, filled
+
+
 def _merge_one(
     incremental_path: Path,
     main_path: Path,
@@ -104,6 +145,7 @@ def _merge_one(
     df_main = pd.read_csv(main_path)
     main_rows = len(df_main)
 
+    coalesced_cells = 0
     if dedup_key and dedup_key in df_main.columns and dedup_key in df_incr.columns:
         # Keep all main rows; only append incremental rows whose key is NOT in main.
         # Normalize on both sides — see _normalize_key_series for why.
@@ -111,6 +153,13 @@ def _merge_one(
         already_in_main = _normalize_key_series(df_incr[dedup_key]).isin(main_keys)
         skipped = int(already_in_main.sum())
         df_incr_new = df_incr[~already_in_main]
+
+        # Coalesce overlap rows: for keys present in BOTH, keep the main row but
+        # fill its NaN cells from the matching incremental row. The incremental
+        # run is the fresher computation; this recovers values that a stale main
+        # row left blank (e.g. sentiment labels on previously mis-coded docs)
+        # without overwriting any value main already has.
+        df_main, coalesced_cells = _coalesce_overlap(df_main, df_incr, dedup_key)
     else:
         skipped = 0
         df_incr_new = df_incr
@@ -129,6 +178,7 @@ def _merge_one(
         "main_rows": main_rows,
         "incremental_rows": incr_rows,
         "new_rows_added": new_rows,
+        "overlap_cells_filled_from_incremental": coalesced_cells,
         "skipped_already_in_main": skipped,
         "merged_rows": len(df_merged),
     }
