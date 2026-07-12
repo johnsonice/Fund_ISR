@@ -1,23 +1,36 @@
 """
-Step 8: Merge incremental results against the main-pipeline base.
+Step 8: Merge incremental results, chaining onto the accumulated dataset.
 
-Merged files are written to the incremental output directory — the main-base
-files are NEVER modified.
+Merged files are written to the incremental output directory — the base files
+are NEVER modified.
+
+Base selection (`--main-dir`, default `auto`): the script CHAINS onto the latest
+prior incremental run's `*_merged.csv` outputs, so each update builds on the
+accumulated dataset rather than re-seeding from `main_base`. This is deliberate:
+`main_base` lags the incremental runs (it lacked a year of fine-tuned 2024 data),
+so merging onto it silently DROPS documents the prior run had already processed.
+Auto-chain picks the most recent run OLDER than the current one that carries all
+four `*_merged.csv` files; a first-ever run (no such prior) falls back to seeding
+from `main_base`. See `resolve_chain_base`.
+
+Only a curated subset is merged (the dataset-level files + general agreement +
+the regression core); the four per-sector stance/agreement results are excluded.
 
 The main-dataset baseline lives in
 `/data/home/xiong/data/Fund/CSR/Tractions/output/main_base/`, refreshed by
 `src/Traction/scripts/inference/run_main_base_refresh.sh` (see
-`src/Traction/main_base_refresh_step.md`). We merge a curated subset of the
-incremental outputs against it (not the four per-sector stance/agreement
-results — those are intentionally excluded; only the dataset-level files and
-the new general-agreement output are folded in).
+`src/Traction/main_base_refresh_step.md`).
 
-To merge against a different base (e.g. the frozen archive at
-`/data/home/xiong/data/Fund/CSR/Traction-archieve/output/`), pass
-`--main-dir` explicitly.
+Overrides:
+  --main-dir PATH     merge against an explicit base (e.g. the frozen archive at
+                      `.../Traction-archieve/output/`); pair with --main-suffix.
+  --main-dir main_base / --no-auto-chain
+                      seed from the raw main base (the old default behavior).
 
 Usage:
-    python 08_merge_all_incremental.py [--incremental-dir DIR] [--main-dir DIR]
+    python 08_merge_all_incremental.py [--incremental-dir DIR]
+                                       [--main-dir auto|main_base|PATH]
+                                       [--main-suffix SUFFIX] [--no-auto-chain]
 """
 
 from __future__ import annotations
@@ -49,6 +62,20 @@ import config  # noqa: E402
 
 DEFAULT_INCREMENTAL_DIR = config.output_dir / "incremental_update" / "05252026_update"
 DEFAULT_MAIN_DIR = config.output_dir / "main_base"
+
+# Root under which per-run incremental output directories live (e.g.
+# `.../incremental_update/06_07_2026_update/`). Used to auto-discover the latest
+# prior run to chain onto — see `resolve_chain_base`.
+INCREMENTAL_ROOT = config.output_dir / "incremental_update"
+
+# A prior run is only a valid chain base if it carries the full set of merged
+# outputs; otherwise chaining onto it would silently drop files.
+CHAIN_BASE_MARKERS = (
+    "df_aiv_merged.csv",
+    "df_paragraphs_merged.csv",
+    "df_documents_general_merged.csv",
+    "df_fin_reg_core_merged.csv",
+)
 
 # Normalize incremental topic names to match the main dataset's short convention.
 TOPIC_RENAME = {
@@ -184,6 +211,56 @@ def _merge_one(
     }
 
 
+def _is_chain_base(d: Path) -> bool:
+    """True if `d` holds the full set of *_merged.csv outputs (a valid chain base)."""
+    return d.is_dir() and all((d / m).exists() for m in CHAIN_BASE_MARKERS)
+
+
+def resolve_chain_base(
+    incremental_dir: Path,
+    root: Path = INCREMENTAL_ROOT,
+    fallback_main_dir: Path = DEFAULT_MAIN_DIR,
+) -> tuple[Path, str]:
+    """Pick the base to merge against, and the main-suffix to read it with.
+
+    Auto-chains onto the LATEST prior incremental run so each update builds on the
+    accumulated dataset instead of re-merging onto the (2024-fine-tuned-less)
+    `main_base` — the mistake that silently dropped a year of processed docs.
+
+    "Latest prior run" = the most-recently-modified directory under `root` that
+    (a) is not `incremental_dir` itself and (b) carries the full set of
+    `*_merged.csv` outputs (`_is_chain_base`). Chosen by mtime, not name, because
+    run-dir names don't sort chronologically (`05252026_update` vs
+    `06_07_2026_update`).
+
+    Returns `(base_dir, main_suffix)`:
+      - a prior run  -> (that dir, "_merged")   [chain onto accumulated data]
+      - none found   -> (fallback_main_dir, "") [first-ever run: seed from main_base]
+
+    Vintage guard: only runs OLDER than the current one are eligible, so
+    re-running an old update doesn't chain onto a newer one. A run's vintage is
+    the mtime of its incremental input (`df_fin_core_incremental.csv`), which —
+    unlike the `*_merged.csv` outputs — is not rewritten by re-merging.
+    """
+    incremental_dir = incremental_dir.resolve()
+    vintage_marker = "df_fin_core_incremental.csv"
+
+    def _vintage(d: Path) -> float:
+        f = d / vintage_marker
+        return f.stat().st_mtime if f.exists() else d.stat().st_mtime
+
+    self_vintage = _vintage(incremental_dir)
+    candidates = [
+        d for d in root.iterdir()
+        if d.resolve() != incremental_dir and d.name != "archieve" and _is_chain_base(d)
+        and _vintage(d) < self_vintage
+    ]
+    if not candidates:
+        return fallback_main_dir, ""
+    latest = max(candidates, key=_vintage)
+    return latest, "_merged"
+
+
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Merge incremental results with main datasets.")
     parser.add_argument(
@@ -194,17 +271,28 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--main-dir",
-        type=Path,
-        default=DEFAULT_MAIN_DIR,
-        help=f"Directory with main datasets. Default: {DEFAULT_MAIN_DIR}",
+        type=str,
+        default="auto",
+        help="Directory with the base datasets to merge against. Default 'auto' "
+             "chains onto the latest prior incremental run (using --main-suffix "
+             "_merged automatically); pass an explicit path to override, or "
+             "'main_base' to seed from the main base. See --no-auto-chain.",
     )
     parser.add_argument(
         "--main-suffix",
         type=str,
-        default="",
+        default=None,
         help="Suffix inserted before the .csv extension of each main file (e.g. "
              "'_merged' makes 'df_aiv.csv' -> 'df_aiv_merged.csv'). Use when "
-             "merging against a previous incremental run's *_merged.csv outputs.",
+             "merging against a previous incremental run's *_merged.csv outputs. "
+             "In 'auto' mode this is set for you; an explicit value overrides it.",
+    )
+    parser.add_argument(
+        "--no-auto-chain",
+        action="store_true",
+        help="Disable auto-chaining; use the literal --main-dir (default main_base) "
+             "with no suffix unless --main-suffix is given. Escape hatch for a "
+             "deliberate merge against the raw main base.",
     )
     return parser.parse_args(argv)
 
@@ -218,14 +306,46 @@ def _apply_main_suffix(main_name: str, suffix: str) -> str:
     return main_name + suffix
 
 
+def _resolve_base(args: argparse.Namespace, incremental_dir: Path) -> tuple[Path, str, str]:
+    """Resolve (main_dir, main_suffix, mode_note) from CLI args.
+
+    Precedence:
+      1. An explicit --main-dir (anything other than the default 'auto') is honored
+         verbatim; 'main_base' is a convenience alias for the configured main base.
+         --main-suffix defaults to '' here unless the user set it.
+      2. --no-auto-chain forces the main-base seed with no suffix (unless overridden).
+      3. Otherwise 'auto': chain onto the latest prior run (suffix '_merged'), or
+         fall back to main_base for the first-ever run.
+    An explicit --main-suffix always wins over the auto-selected one.
+    """
+    explicit_dir = args.main_dir != "auto"
+
+    if explicit_dir:
+        main_dir = (DEFAULT_MAIN_DIR if args.main_dir == "main_base" else Path(args.main_dir)).resolve()
+        suffix = args.main_suffix or ""
+        note = f"explicit --main-dir ({main_dir.name})"
+    elif args.no_auto_chain:
+        main_dir = DEFAULT_MAIN_DIR.resolve()
+        suffix = args.main_suffix or ""
+        note = "auto-chain disabled -> main_base seed"
+    else:
+        base, auto_suffix = resolve_chain_base(incremental_dir)
+        main_dir = base.resolve()
+        suffix = args.main_suffix if args.main_suffix is not None else auto_suffix
+        if main_dir == DEFAULT_MAIN_DIR.resolve():
+            note = "auto: no prior run found -> main_base seed (first run)"
+        else:
+            note = f"auto: chaining onto latest prior run '{main_dir.name}'"
+    return main_dir, suffix, note
+
+
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
     incremental_dir = args.incremental_dir.resolve()
-    main_dir = args.main_dir.resolve()
-    main_suffix = args.main_suffix
+    main_dir, main_suffix, mode_note = _resolve_base(args, incremental_dir)
 
     print(f"Incremental dir: {incremental_dir}")
-    print(f"Main dir:        {main_dir}")
+    print(f"Main dir:        {main_dir}  [{mode_note}]")
     if main_suffix:
         print(f"Main suffix:     {main_suffix} (reading e.g. df_aiv{main_suffix}.csv from main dir)")
     print(f"Merged outputs:  {incremental_dir}")

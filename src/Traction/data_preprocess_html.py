@@ -135,7 +135,16 @@ def _flatten_sections(article_body) -> list[tuple[str, list]]:
 
 
 def _find_staff_report_html(package_dir: Path) -> Path | None:
-    """Pick the article file containing a Staff Appraisal heading."""
+    """Pick the article file containing a Staff Appraisal heading.
+
+    Falls back to the richest-narrative article body when NO article carries a
+    Staff-Appraisal heading — some reports (e.g. Montenegro 2025) structure the
+    staff report as Context/Recent Developments/Outlook/Policy Discussions/Annexes
+    with no separately-titled appraisal section. Without this fallback such a
+    package extracts to nothing and is silently dropped. The fallback only
+    triggers when the primary (heading-based) search finds nothing, so it never
+    changes the selection for any report that does have an appraisal heading.
+    """
     pattern = re.compile(r"^article-A00\d(-[a-z]{2})?\.html$", re.IGNORECASE)
     candidates = sorted(
         p
@@ -144,6 +153,8 @@ def _find_staff_report_html(package_dir: Path) -> Path | None:
         and pattern.match(p.name)
         and not p.stem.lower().startswith("article-a000")
     )
+    fallback: Path | None = None
+    fallback_score = 0
     for path in candidates:
         try:
             text = path.read_text(encoding="utf-8", errors="replace")
@@ -157,6 +168,18 @@ def _find_staff_report_html(package_dir: Path) -> Path | None:
             t = _norm_lower(h.get_text(" ", strip=True))
             if "staff appraisal" in t or "staff apraisal" in t or "staff assessment" in t:
                 return path
+        # Track the article with the most numbered narrative paragraphs as the
+        # fallback staff-report body (the real report, not a title/annex-only file).
+        numbered = sum(
+            1 for p in body.find_all("p")
+            if p.get_text(strip=True) and p.get_text(strip=True)[0].isdigit()
+        )
+        if numbered > fallback_score:
+            fallback_score, fallback = numbered, path
+    # Require a meaningful body so we don't select a stub (e.g. a title-page-only
+    # A002). 10 numbered paragraphs is well below any real staff report.
+    if fallback is not None and fallback_score >= 10:
+        return fallback
     return None
 
 
@@ -253,7 +276,11 @@ def _build_sr_sections(article_body):
 
     sa_section_div = _find_sa_section_div(inner)
     if sa_section_div is None:
-        return [], None, body_copy
+        # No Staff-Appraisal section (some reports don't title one). Rather than
+        # drop the whole document, keep ALL narrative sections as SR leaves so the
+        # staff/authority split still runs; SA is simply empty for this report.
+        all_leaves = [(title, paras) for title, paras in _flatten_sections(inner) if paras]
+        return all_leaves, None, body_copy
 
     leaves = _flatten_sections(inner)
     sa_descendant_ids = {id(sa_section_div)}
@@ -453,8 +480,11 @@ def extract_StaffAppraisal_and_Buff_html(folder_dict: dict[str, str]):
                 article_body = soup.find("div", id="articleBody")
 
                 sr_leaves, sa_section_div, _scrubbed_body = _build_sr_sections(article_body)
-                if sa_section_div is not None:
-                    sa_html, para_sa = _extract_sa(sa_section_div)
+                # Write whenever we have EITHER an appraisal section OR narrative SR
+                # leaves. The old guard required sa_section_div, so appraisal-less
+                # reports (sr_leaves present, SA None) were silently dropped.
+                if sa_section_div is not None or sr_leaves:
+                    sa_html, para_sa = _extract_sa(sa_section_div)  # ("", []) when None
                     staff_dict[folder] = str(staff_path)
                     staff_content_dict[folder] = text
                     text_sa_dict[folder] = sa_html
