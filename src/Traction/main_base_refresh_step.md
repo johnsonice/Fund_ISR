@@ -135,7 +135,7 @@ python src/Traction/create_final_dataset.py --start-year 2015 --end-year 2023
 - Monetary Stance: `ft:gpt-4.1-2025-04-14:protagolabs:monetary-stance:D2K6qCDj`
 - Fiscal Stance: `ft:gpt-4.1-2025-04-14:protagolabs:fiscal-stance:D2Lw2NJZ`
 
-General agreement uses `gpt-5.4-mini` with the `general_agreement_simple`
+General agreement uses `gpt-5.4-mini-2026-03-17` with the `general_agreement_simple`
 prompt variant.
 
 ## Verification

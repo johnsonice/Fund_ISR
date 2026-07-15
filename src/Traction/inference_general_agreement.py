@@ -52,7 +52,7 @@ def parse_args(argv=None):
     # Override with --prompt-variant simple for the legacy v1 schema.
     parser.set_defaults(
         data_file='/data/home/xiong/data/Fund/CSR/Tractions/output/df_documents.csv',
-        model='gpt-5.4-mini',
+        model='gpt-5.4-mini-2026-03-17',
         prompt_variant='simple_v2',
         max_output_tokens=16384,
     )

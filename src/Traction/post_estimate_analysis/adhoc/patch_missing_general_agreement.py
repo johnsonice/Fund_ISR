@@ -26,7 +26,7 @@ The inference itself is a SEPARATE manual step between the two phases:
     --data-file  <ADHOC_DIR>/df_documents_missing_input.csv \
     --output-dir <ADHOC_DIR> \
     --output-file df_documents_general_v2_patch.csv \
-    --model gpt-5.4-mini --prompt-variant simple_v2 \
+    --model gpt-5.4-mini-2026-03-17 --prompt-variant simple_v2 \
     --submit --post-process --max-output-tokens 16384
 
 Usage
@@ -176,7 +176,7 @@ def build_input() -> None:
         f"    --data-file {MISSING_INPUT_CSV} \\\n"
         f"    --output-dir {ADHOC_DIR} \\\n"
         "    --output-file df_documents_general_v2_patch.csv \\\n"
-        "    --model gpt-5.4-mini --prompt-variant simple_v2 \\\n"
+        "    --model gpt-5.4-mini-2026-03-17 --prompt-variant simple_v2 \\\n"
         "    --submit --post-process --max-output-tokens 16384"
     )
 

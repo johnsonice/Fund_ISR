@@ -18,6 +18,6 @@ INCREMENTAL_DIR="/data/home/xiong/data/Fund/CSR/Tractions/output/incremental_upd
   --create-batch \
   --submit \
   --post-process \
-  --model gpt-5.4-mini
+  --model gpt-5.4-mini-2026-03-17
 
 echo "Done. Output: ${INCREMENTAL_DIR}/paragraph_with_sector_incremental.csv"

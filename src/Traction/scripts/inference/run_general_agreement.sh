@@ -25,7 +25,7 @@ MAIN_BASE_DIR="${MAIN_BASE_DIR:-/data/home/xiong/data/Fund/CSR/Tractions/output/
 ARCHIVE_DF_DOCS="/data/home/xiong/data/Fund/CSR/Traction-archieve/output/df_documents.csv"
 LIVE_DF_DOCS="${MAIN_BASE_DIR}/df_documents.csv"
 OUTPUT_FILE="df_documents_general.csv"
-MODEL=${MODEL:-gpt-5.4-mini}
+MODEL=${MODEL:-gpt-5.4-mini-2026-03-17}
 
 mkdir -p "$MAIN_BASE_DIR"
 

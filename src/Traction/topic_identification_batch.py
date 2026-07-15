@@ -251,8 +251,8 @@ def parse_args(argv=None):
                         help='Prompt file name')
     parser.add_argument('--output_file', type=str, default='paragraph_with_sector_batch.csv',
                         help='Post-processed CSV output file name')
-    parser.add_argument('--model', type=str, default='gpt-5.4-mini',
-                        help='OpenAI model to use (default: gpt-5.4-mini)')
+    parser.add_argument('--model', type=str, default='gpt-5.4-mini-2026-03-17',
+                        help='OpenAI model to use (default: gpt-5.4-mini-2026-03-17)')
     parser.add_argument('--temperature', type=float, default=1.0,
                         help='Model temperature (default: 1.0)')
     parser.add_argument('--max-input-length', type=int, default=2000,

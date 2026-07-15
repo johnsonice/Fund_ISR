@@ -20,7 +20,7 @@
 # Flags:
 #   --yes           confirm the API-hitting inference step (else it is skipped)
 #   --from PHASE    start at build-input | inference | append (default: build-input)
-#   --model NAME    override the inference model (default: gpt-5.4-mini)
+#   --model NAME    override the inference model (default: gpt-5.4-mini-2026-03-17)
 set -euo pipefail
 
 # ----------------------------------------------------------------------------
@@ -37,7 +37,7 @@ INPUT_CSV="${ADHOC_DIR}/df_documents_missing_input.csv"
 PATCH_CSV="${ADHOC_DIR}/df_documents_general_v2_patch.csv"
 TARGET_CSV="${ADHOC_DIR}/df_documents_general_v2.csv"
 
-MODEL="${MODEL:-gpt-5.4-mini}"
+MODEL="${MODEL:-gpt-5.4-mini-2026-03-17}"
 PROMPT_VARIANT="simple_v2"
 MAX_OUTPUT_TOKENS=16384
 

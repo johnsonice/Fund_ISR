@@ -142,7 +142,7 @@ def _save_cache(cache: dict[str, dict[str, str]], cache_path: Path) -> None:
 def _classify_via_llm(
     areas: list[str],
     sector: str,
-    model: str = "gpt-5.4-mini",
+    model: str = "gpt-5.4-mini-2026-03-17",
 ) -> dict[str, str]:
     """Call OpenAI to classify a batch of area labels into sector categories."""
     from dotenv import load_dotenv
@@ -197,7 +197,7 @@ def classify_areas_batch(
     sector: str,
     *,
     cache_path: Path | None = None,
-    model: str = "gpt-5.4-mini",
+    model: str = "gpt-5.4-mini-2026-03-17",
     batch_size: int = 80,
 ) -> dict[str, str]:
     """Classify area labels into higher-level categories for the given sector.
@@ -344,7 +344,7 @@ def classify_general_csv(
     data_path: Path,
     *,
     cache_path: Path | None = None,
-    model: str = "gpt-5.4-mini",
+    model: str = "gpt-5.4-mini-2026-03-17",
 ) -> dict[str, dict[str, str]]:
     """Classify all disagreement areas in a general-agreement CSV file.
 
@@ -378,7 +378,7 @@ def main() -> None:
     parser.add_argument("--areas", nargs="+",
                         help="Area labels to classify (requires --sector)")
     parser.add_argument("--cache-file", type=Path, default=DEFAULT_CACHE_PATH)
-    parser.add_argument("--model", type=str, default="gpt-5.4-mini")
+    parser.add_argument("--model", type=str, default="gpt-5.4-mini-2026-03-17")
     args = parser.parse_args()
 
     if args.preseed:

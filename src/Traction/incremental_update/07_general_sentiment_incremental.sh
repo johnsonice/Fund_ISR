@@ -21,7 +21,7 @@ fi
 INCREMENTAL_DIR="/data/home/xiong/data/Fund/CSR/Tractions/output/incremental_update/06_07_2026_update"
 DATA_FILE="${INCREMENTAL_DIR}/df_documents_incremental.csv"
 OUTPUT_FILE="df_documents_general_incremental.csv"
-MODEL=${MODEL:-gpt-5.4-mini}
+MODEL=${MODEL:-gpt-5.4-mini-2026-03-17}
 
 echo "=== General Agreement (Zero-shot) ==="
 "$TRACTION_PY" inference_general_agreement.py \

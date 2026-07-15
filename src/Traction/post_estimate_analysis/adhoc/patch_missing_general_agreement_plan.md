@@ -59,7 +59,7 @@ targeted top-up of just the missing rows.
 | Target to append into | `…/output/adhoc/general_agreement_v2/df_documents_general_v2.csv` |
 | Inference entry point | `src/Traction/inference_general_agreement.py` |
 | Prompt variant | `simple_v2` (v2 schema — matches target) |
-| Model | `gpt-5.4-mini` (same as the pipeline default in `07_*`/`run_general_agreement.sh`) |
+| Model | `gpt-5.4-mini-2026-03-17` (same as the pipeline default in `07_*`/`run_general_agreement.sh`) |
 
 ## Implementation plan
 
@@ -95,7 +95,7 @@ Invoke the existing inference script against the 37-row input, writing to a
   --data-file  …/adhoc/general_agreement_v2/df_documents_missing_input.csv \
   --output-dir …/adhoc/general_agreement_v2 \
   --output-file df_documents_general_v2_patch.csv \
-  --model gpt-5.4-mini \
+  --model gpt-5.4-mini-2026-03-17 \
   --prompt-variant simple_v2 \
   --submit --post-process \
   --max-output-tokens 16384
@@ -144,7 +144,7 @@ In the same script (a `--append` phase, run after the batch completes):
 
 ## Open questions before I run it
 
-1. **Model** — use `gpt-5.4-mini` (pipeline default) so the 37 new rows are scored
+1. **Model** — use `gpt-5.4-mini-2026-03-17` (pipeline default) so the 37 new rows are scored
    by the same model as the existing 981? (Recommended, for consistency.)
 2. **The 1 text-less doc** (`9781484305775`, CEMAC 2017) — exclude it (my plan) or
    do you want me to try to source its staff/buff text from the paragraph files

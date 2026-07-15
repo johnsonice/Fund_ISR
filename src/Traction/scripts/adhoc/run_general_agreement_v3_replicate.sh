@@ -6,9 +6,9 @@
 #   - The original v2 snapshot lives at
 #     output/adhoc/general_agreement_v2/df_documents_general_v2.csv (981 rows).
 #   - It was produced by `inference_general_agreement.py` with its DEFAULT params
-#     (model=gpt-5.4-mini, prompt-variant=simple_v2, temperature=1.0,
+#     (model=gpt-5.4-mini-2026-03-17, prompt-variant=simple_v2, temperature=1.0,
 #     max-output-tokens=16384) over input `main_base/df_documents.csv`.
-#   - gpt-5.4-mini is a reasoning model: temperature is pinned to 1.0 and `seed`
+#   - gpt-5.4-mini-2026-03-17 is a reasoning model: temperature is pinned to 1.0 and `seed`
 #     is not supported, so the per-document integer scores are NOT bit-for-bit
 #     reproducible. Two runs a week apart (2026-06-01 vs 2026-06-08) differed on
 #     ~94% of the 981 documents. This run measures that randomness; it will NOT
